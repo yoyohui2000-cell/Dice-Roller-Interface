@@ -10,6 +10,8 @@ export * from './campaignError';
 export * from './campaignSession';
 export * from './campaignSessionInput';
 export * from './campaignSessionUpdate';
+export * from './combatEntry';
+export * from './combatStateData';
 export * from './diceRollEntry';
 export * from './diceRollInput';
 export * from './diceRollResult';

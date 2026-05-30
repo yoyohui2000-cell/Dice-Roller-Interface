@@ -51,11 +51,29 @@ export interface GeminiError {
   error: string;
 }
 
+export interface CombatEntry {
+  name: string;
+  initiative: number;
+  /** @nullable */
+  hp: number | null;
+  /** @nullable */
+  maxHp: number | null;
+  isEnemy: boolean;
+  /** @nullable */
+  status: string | null;
+}
+
+export interface CombatStateData {
+  round: number;
+  order: CombatEntry[];
+}
+
 export interface CampaignSession {
   id: number;
   name: string;
   worldState: string;
   phase: string;
+  combatState: CombatStateData | null;
   /** @nullable */
   conversationId: number | null;
   createdAt: string;

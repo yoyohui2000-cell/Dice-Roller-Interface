@@ -115,6 +115,17 @@ export const ListCampaignSessionsResponseItem = zod.object({
   "name": zod.string(),
   "worldState": zod.string(),
   "phase": zod.string(),
+  "combatState": zod.union([zod.object({
+  "round": zod.number(),
+  "order": zod.array(zod.object({
+  "name": zod.string(),
+  "initiative": zod.number(),
+  "hp": zod.number().nullable(),
+  "maxHp": zod.number().nullable(),
+  "isEnemy": zod.boolean(),
+  "status": zod.string().nullable()
+}))
+}),zod.null()]),
   "conversationId": zod.number().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -143,6 +154,17 @@ export const GetCampaignSessionResponse = zod.object({
   "name": zod.string(),
   "worldState": zod.string(),
   "phase": zod.string(),
+  "combatState": zod.union([zod.object({
+  "round": zod.number(),
+  "order": zod.array(zod.object({
+  "name": zod.string(),
+  "initiative": zod.number(),
+  "hp": zod.number().nullable(),
+  "maxHp": zod.number().nullable(),
+  "isEnemy": zod.boolean(),
+  "status": zod.string().nullable()
+}))
+}),zod.null()]),
   "conversationId": zod.number().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -166,6 +188,17 @@ export const UpdateCampaignSessionResponse = zod.object({
   "name": zod.string(),
   "worldState": zod.string(),
   "phase": zod.string(),
+  "combatState": zod.union([zod.object({
+  "round": zod.number(),
+  "order": zod.array(zod.object({
+  "name": zod.string(),
+  "initiative": zod.number(),
+  "hp": zod.number().nullable(),
+  "maxHp": zod.number().nullable(),
+  "isEnemy": zod.boolean(),
+  "status": zod.string().nullable()
+}))
+}),zod.null()]),
   "conversationId": zod.number().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()

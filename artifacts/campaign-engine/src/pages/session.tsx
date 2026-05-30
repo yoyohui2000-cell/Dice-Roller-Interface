@@ -16,11 +16,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Send, Dices, UserPlus, Wifi, WifiOff, Clock, Users, BookOpen } from "lucide-react";
+import { ArrowLeft, Send, Dices, UserPlus, Wifi, WifiOff, Clock, Users, BookOpen, Swords, Shield, Skull } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
-import { useRealtimeSession, type RealtimeEvent, type TurnState } from "@/hooks/use-realtime-session";
+import { useRealtimeSession, type RealtimeEvent, type TurnState, type CombatState } from "@/hooks/use-realtime-session";
 
 type NpcData = {
   id: number; sessionId: number; name: string; location: string;
@@ -74,8 +74,9 @@ export default function Session() {
   const prevWorldStateRef = useRef<string | undefined>(undefined);
 
   const [turnState, setTurnState] = useState<TurnState>({ who: "全體", dice: null, purpose: null });
+  const [combatState, setCombatState] = useState<CombatState>(null);
   const [sessionNpcs, setSessionNpcs] = useState<NpcData[]>([]);
-  const [sidebarTab, setSidebarTab] = useState<"status" | "npcs">("status");
+  const [sidebarTab, setSidebarTab] = useState<"status" | "npcs" | "combat">("status");
   const pendingDiceAutoSubmit = useRef(false);
   const handleSendRef = useRef<() => void>(() => {});
 
@@ -177,7 +178,10 @@ export default function Session() {
         break;
       }
       case "gm_done": {
-        narrativeRef.current = narrativeRef.current.replace(/\n?%%TURN:\{[^%]*\}%%\s*$/, "").trimEnd() + "\n\n";
+        narrativeRef.current = narrativeRef.current
+          .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
+          .replace(/\n?%%TURN:\{[^%]*\}%%\s*$/, "")
+          .trimEnd() + "\n\n";
         setNarrative(narrativeRef.current);
         setIsStreaming(false);
         refetchHistory();
@@ -186,8 +190,21 @@ export default function Session() {
         if (event.turnState) {
           setTurnState(event.turnState);
         }
+        if (event.combatState !== undefined) {
+          setCombatState(event.combatState);
+          if (event.combatState !== null) {
+            setSidebarTab("combat");
+          }
+        }
         setTimeout(() => refetchSession(), 3500);
         setTimeout(() => fetchNpcs(), 3000);
+        break;
+      }
+      case "combat_update": {
+        setCombatState(event.combatState);
+        if (event.combatState !== null) {
+          setSidebarTab("combat");
+        }
         break;
       }
       case "turn_change": {
@@ -303,14 +320,24 @@ export default function Session() {
                 broadcast({ type: "gm_chunk", chunk: data.content });
               }
               if (data.done) {
-                narrativeRef.current = narrativeRef.current.replace(/\n?%%TURN:\{[^%]*\}%%\s*$/, "").trimEnd() + "\n\n";
+                narrativeRef.current = narrativeRef.current
+                  .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
+                  .replace(/\n?%%TURN:\{[^%]*\}%%\s*$/, "")
+                  .trimEnd() + "\n\n";
                 setNarrative(narrativeRef.current);
                 setIsStreaming(false);
 
                 const newTurnState: TurnState = data.turnState ?? { who: "全體", dice: null, purpose: null };
                 setTurnState(newTurnState);
 
-                broadcast({ type: "gm_done", turnState: newTurnState });
+                if (data.combatState !== undefined) {
+                  const newCombatState: CombatState = data.combatState as CombatState;
+                  setCombatState(newCombatState);
+                  if (newCombatState !== null) setSidebarTab("combat");
+                  broadcast({ type: "combat_update", combatState: newCombatState });
+                }
+
+                broadcast({ type: "gm_done", turnState: newTurnState, combatState: data.combatState as CombatState | undefined });
                 broadcast({ type: "turn_change", ...newTurnState });
 
                 refetchHistory();
@@ -670,6 +697,18 @@ export default function Session() {
                 </span>
               )}
             </button>
+            {combatState && (
+              <button
+                onClick={() => setSidebarTab("combat")}
+                className={`flex items-center gap-1 flex-1 justify-center py-1 rounded text-sm font-serif transition-colors relative ${sidebarTab === "combat" ? "bg-red-900/20 text-red-400" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Swords className="w-3.5 h-3.5" />
+                戰鬥
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 text-white rounded-full text-[9px] flex items-center justify-center font-mono animate-pulse">
+                  {combatState.round}
+                </span>
+              </button>
+            )}
           </div>
 
           {sidebarTab === "status" && (
@@ -759,6 +798,88 @@ export default function Session() {
                   </div>
                 </ScrollArea>
               )}
+            </div>
+          )}
+
+          {sidebarTab === "combat" && combatState && (
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-1.5">
+                  <Swords className="w-4 h-4 text-red-400" />
+                  <span className="font-serif text-base text-red-400">先攻順序</span>
+                </div>
+                <Badge variant="outline" className="border-red-800/50 text-red-400 bg-red-950/30 font-mono text-xs px-2">
+                  第 {combatState.round} 回合
+                </Badge>
+              </div>
+              <ScrollArea className="flex-1">
+                <div className="space-y-1.5 pr-1">
+                  {combatState.order.map((entry, idx) => {
+                    const isActive = entry.name === turnState.who;
+                    const isDead = entry.status === "死亡";
+                    return (
+                      <motion.div
+                        key={`${entry.name}-${idx}`}
+                        initial={{ opacity: 0, x: 8 }}
+                        animate={{ opacity: isDead ? 0.4 : 1, x: 0 }}
+                        transition={{ delay: idx * 0.04 }}
+                        className={`relative p-2 rounded border text-xs transition-all duration-300 ${
+                          isActive
+                            ? "border-red-500/60 bg-red-950/40 shadow-[0_0_8px_rgba(239,68,68,0.15)]"
+                            : entry.isEnemy
+                              ? "border-red-900/40 bg-red-950/10"
+                              : "border-primary/20 bg-background"
+                        }`}
+                      >
+                        {isActive && (
+                          <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-red-500 rounded-l" />
+                        )}
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {entry.isEnemy ? (
+                              <Skull className="w-3 h-3 text-red-400 shrink-0" />
+                            ) : (
+                              <Shield className="w-3 h-3 text-primary shrink-0" />
+                            )}
+                            <span className={`font-serif font-bold truncate ${isActive ? "text-red-300" : entry.isEnemy ? "text-red-200/80" : "text-foreground"}`}>
+                              {entry.name}
+                            </span>
+                          </div>
+                          <span className="font-mono text-muted-foreground/70 text-[10px] shrink-0 ml-1">
+                            先攻 {entry.initiative}
+                          </span>
+                        </div>
+                        {entry.hp !== null && entry.maxHp !== null && (
+                          <div className="space-y-0.5">
+                            <div className="flex justify-between text-[10px] text-muted-foreground/60">
+                              <span>HP</span>
+                              <span className="font-mono">{entry.hp}/{entry.maxHp}</span>
+                            </div>
+                            <div className="h-1 bg-muted/30 rounded-full overflow-hidden">
+                              <motion.div
+                                className={`h-full rounded-full ${
+                                  entry.hp / entry.maxHp > 0.5 ? "bg-green-500" :
+                                  entry.hp / entry.maxHp > 0.25 ? "bg-yellow-500" : "bg-red-500"
+                                }`}
+                                initial={{ width: 0 }}
+                                animate={{ width: `${Math.max(0, (entry.hp / entry.maxHp) * 100)}%` }}
+                                transition={{ duration: 0.5 }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                        {entry.status && (
+                          <div className="mt-1">
+                            <span className="text-[9px] px-1 py-0.5 rounded bg-yellow-900/40 border border-yellow-700/40 text-yellow-400 font-mono">
+                              {entry.status}
+                            </span>
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
             </div>
           )}
         </aside>

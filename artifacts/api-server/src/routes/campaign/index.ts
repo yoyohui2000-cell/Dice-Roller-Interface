@@ -27,6 +27,7 @@ import {
   buildWorldStateEvalMessages,
   buildNpcContext,
   parseTurnState,
+  type CombatState,
 } from "../../lib/gm-prompt";
 
 const router: IRouter = Router();
@@ -71,7 +72,12 @@ router.get("/campaign/sessions/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Session not found" });
     return;
   }
-  res.json({ ...session, createdAt: session.createdAt.toISOString(), updatedAt: session.updatedAt.toISOString() });
+  res.json({
+    ...session,
+    createdAt: session.createdAt.toISOString(),
+    updatedAt: session.updatedAt.toISOString(),
+    combatState: session.combatState ?? null,
+  });
 });
 
 router.patch("/campaign/sessions/:id", async (req, res): Promise<void> => {
@@ -242,7 +248,7 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
       }
     }
 
-    const { cleanText, turnState } = parseTurnState(fullResponse);
+    const { cleanText, turnState, combatState } = parseTurnState(fullResponse);
 
     await db.insert(narrativeHistory).values({
       sessionId: params.data.id,
@@ -251,7 +257,13 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
       playerId: null,
     });
 
-    res.write(`data: ${JSON.stringify({ done: true, turnState })}\n\n`);
+    if (combatState !== undefined) {
+      await db.update(campaignSessions)
+        .set({ combatState: combatState as CombatState, updatedAt: new Date() })
+        .where(eq(campaignSessions.id, params.data.id));
+    }
+
+    res.write(`data: ${JSON.stringify({ done: true, turnState, combatState: combatState !== undefined ? combatState : undefined })}\n\n`);
     res.end();
 
     // Background: world state evaluation + NPC extraction — never blocks players

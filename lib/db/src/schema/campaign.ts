@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { conversations } from "./conversations";
@@ -8,6 +8,7 @@ export const campaignSessions = pgTable("campaign_sessions", {
   name: text("name").notNull(),
   worldState: text("world_state").notNull().default("exploration"),
   phase: text("phase").notNull().default("exploration"),
+  combatState: jsonb("combat_state").$type<{ round: number; order: Array<{ name: string; initiative: number; hp: number | null; maxHp: number | null; isEnemy: boolean; status: string | null }> } | null>().default(null),
   conversationId: integer("conversation_id").references(() => conversations.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),

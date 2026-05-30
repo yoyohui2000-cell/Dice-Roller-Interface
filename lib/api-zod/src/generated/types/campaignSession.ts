@@ -5,12 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CombatStateData } from './combatStateData';
 
 export interface CampaignSession {
   id: number;
   name: string;
   worldState: string;
   phase: string;
+  combatState: CombatStateData | null;
   /** @nullable */
   conversationId: number | null;
   createdAt: Date;

@@ -4,12 +4,24 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export type TurnState = { who: string; dice: string | null; purpose: string | null };
 
+export type CombatEntry = {
+  name: string;
+  initiative: number;
+  hp: number | null;
+  maxHp: number | null;
+  isEnemy: boolean;
+  status: string | null;
+};
+
+export type CombatState = { round: number; order: CombatEntry[] } | null;
+
 export type RealtimeEvent =
   | { type: "player_action"; playerId: number; characterName: string; action: string; rollInfo?: string }
   | { type: "gm_chunk"; chunk: string }
-  | { type: "gm_done"; turnState?: TurnState }
+  | { type: "gm_done"; turnState?: TurnState; combatState?: CombatState }
   | { type: "turn_change"; who: string; dice: string | null; purpose: string | null }
   | { type: "world_state_update" }
+  | { type: "combat_update"; combatState: CombatState }
   | { type: "dice_roll"; playerId: number; characterName: string; diceType: string; result: number; purpose: string }
   | { type: "player_joined"; characterName: string; race: string; class: string }
   | { type: "player_hp_update"; playerId: number; characterName: string; hp: number; maxHp: number };

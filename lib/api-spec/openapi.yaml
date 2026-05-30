@@ -514,6 +514,42 @@ components:
       required:
         - error
 
+    CombatEntry:
+      type: object
+      properties:
+        name:
+          type: string
+        initiative:
+          type: integer
+        hp:
+          type: ["integer", "null"]
+        maxHp:
+          type: ["integer", "null"]
+        isEnemy:
+          type: boolean
+        status:
+          type: ["string", "null"]
+      required:
+        - name
+        - initiative
+        - hp
+        - maxHp
+        - isEnemy
+        - status
+
+    CombatStateData:
+      type: object
+      properties:
+        round:
+          type: integer
+        order:
+          type: array
+          items:
+            $ref: "#/components/schemas/CombatEntry"
+      required:
+        - round
+        - order
+
     CampaignSession:
       type: object
       properties:
@@ -525,6 +561,10 @@ components:
           type: string
         phase:
           type: string
+        combatState:
+          oneOf:
+            - $ref: "#/components/schemas/CombatStateData"
+            - type: "null"
         conversationId:
           type: ["integer", "null"]
         createdAt:
@@ -538,6 +578,7 @@ components:
         - name
         - worldState
         - phase
+        - combatState
         - conversationId
         - createdAt
         - updatedAt
