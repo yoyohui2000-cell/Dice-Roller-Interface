@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "AI Campaign Engine"
+version = "1.0.0"
+id = "artifacts/campaign-engine"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23792
+
+[services.development]
+run = "pnpm --filter @workspace/campaign-engine run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/campaign-engine", "run", "build" ]
+publicDir = "artifacts/campaign-engine/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23792"
+BASE_PATH = "/"

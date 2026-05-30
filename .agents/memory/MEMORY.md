@@ -1,0 +1,4 @@
+- [API server build quirk](api-server-build.md) — must be run from within artifacts/api-server/, not via pnpm --filter from workspace root
+- [Vite env injection](vite-supabase-env.md) — Supabase keys injected via vite define{} not VITE_ prefixed vars, since secrets aren't VITE_ prefixed
+- [Workflow commands](workflow-commands.md) — exact working commands for both workflows
+- [Codegen workflow](codegen-workflow.md) — run orval from lib/api-spec/ to regenerate api-client-react and api-zod; restart Vite after (clean:true deletes files mid-watch causing HMR errors)

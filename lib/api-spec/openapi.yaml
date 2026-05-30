@@ -1,0 +1,766 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: gemini
+    description: Gemini AI chat and image operations
+  - name: campaign
+    description: Campaign and game session management
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /gemini/conversations:
+    get:
+      operationId: listGeminiConversations
+      tags: [gemini]
+      summary: List all conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GeminiConversation"
+    post:
+      operationId: createGeminiConversation
+      tags: [gemini]
+      summary: Create a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeminiConversationInput"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiConversation"
+
+  /gemini/conversations/{id}:
+    get:
+      operationId: getGeminiConversation
+      tags: [gemini]
+      summary: Get conversation with messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiConversationWithMessages"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiError"
+    delete:
+      operationId: deleteGeminiConversation
+      tags: [gemini]
+      summary: Delete a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiError"
+
+  /gemini/conversations/{id}/messages:
+    get:
+      operationId: listGeminiMessages
+      tags: [gemini]
+      summary: List messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GeminiMessage"
+    post:
+      operationId: sendGeminiMessage
+      tags: [gemini]
+      summary: Send a message and receive an AI response (SSE stream)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeminiMessageInput"
+      responses:
+        "200":
+          description: SSE stream of assistant response chunks
+          content:
+            text/event-stream: {}
+
+  /gemini/generate-image:
+    post:
+      operationId: generateGeminiImage
+      tags: [gemini]
+      summary: Generate an image from a text prompt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeminiImageInput"
+      responses:
+        "200":
+          description: Generated image data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiImageOutput"
+
+  /campaign/sessions:
+    get:
+      operationId: listCampaignSessions
+      tags: [campaign]
+      summary: List all campaign sessions
+      responses:
+        "200":
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CampaignSession"
+    post:
+      operationId: createCampaignSession
+      tags: [campaign]
+      summary: Create a new campaign session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignSessionInput"
+      responses:
+        "201":
+          description: Created session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignSession"
+
+  /campaign/sessions/{id}:
+    get:
+      operationId: getCampaignSession
+      tags: [campaign]
+      summary: Get a campaign session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Campaign session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignSession"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignError"
+    patch:
+      operationId: updateCampaignSession
+      tags: [campaign]
+      summary: Update a campaign session state
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignSessionUpdate"
+      responses:
+        "200":
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignSession"
+
+  /campaign/sessions/{id}/players:
+    get:
+      operationId: listSessionPlayers
+      tags: [campaign]
+      summary: List players in a session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of players
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Player"
+    post:
+      operationId: addSessionPlayer
+      tags: [campaign]
+      summary: Add a player to a session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerInput"
+      responses:
+        "201":
+          description: Added player
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Player"
+
+  /campaign/players/{playerId}:
+    patch:
+      operationId: updatePlayer
+      tags: [campaign]
+      summary: Update player stats/HP/state
+      parameters:
+        - name: playerId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerUpdate"
+      responses:
+        "200":
+          description: Updated player
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Player"
+
+  /campaign/sessions/{id}/roll:
+    post:
+      operationId: submitDiceRoll
+      tags: [campaign]
+      summary: Submit a player dice roll result to the GM
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiceRollInput"
+      responses:
+        "200":
+          description: Roll acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiceRollResult"
+
+  /campaign/sessions/{id}/gm-message:
+    post:
+      operationId: sendGmMessage
+      tags: [campaign]
+      summary: Send a player action to the AI GM and get SSE narrative response
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GmMessageInput"
+      responses:
+        "200":
+          description: SSE stream of GM narrative response
+          content:
+            text/event-stream: {}
+
+  /campaign/sessions/{id}/history:
+    get:
+      operationId: getSessionHistory
+      tags: [campaign]
+      summary: Get full narrative history for a session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Narrative history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NarrativeEntry"
+
+  /campaign/sessions/{id}/dice-rolls:
+    get:
+      operationId: getSessionDiceRolls
+      tags: [campaign]
+      summary: Get all dice rolls for a session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of dice rolls with player info
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DiceRollEntry"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    GeminiConversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - createdAt
+
+    GeminiMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - conversationId
+        - role
+        - content
+        - createdAt
+
+    GeminiConversationInput:
+      type: object
+      properties:
+        title:
+          type: string
+      required:
+        - title
+
+    GeminiMessageInput:
+      type: object
+      properties:
+        content:
+          type: string
+      required:
+        - content
+
+    GeminiConversationWithMessages:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeminiMessage"
+      required:
+        - id
+        - title
+        - createdAt
+        - messages
+
+    GeminiImageInput:
+      type: object
+      properties:
+        prompt:
+          type: string
+      required:
+        - prompt
+
+    GeminiImageOutput:
+      type: object
+      properties:
+        b64_json:
+          type: string
+        mimeType:
+          type: string
+      required:
+        - b64_json
+        - mimeType
+
+    GeminiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    CampaignSession:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        worldState:
+          type: string
+        phase:
+          type: string
+        conversationId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - worldState
+        - phase
+        - conversationId
+        - createdAt
+        - updatedAt
+
+    CampaignSessionInput:
+      type: object
+      properties:
+        name:
+          type: string
+        worldDescription:
+          type: string
+      required:
+        - name
+
+    CampaignSessionUpdate:
+      type: object
+      properties:
+        worldState:
+          type: string
+        phase:
+          type: string
+
+    Player:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        name:
+          type: string
+        characterName:
+          type: string
+        race:
+          type: string
+        class:
+          type: string
+        background:
+          type: string
+        hp:
+          type: integer
+        maxHp:
+          type: integer
+        ac:
+          type: integer
+        level:
+          type: integer
+        stats:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - sessionId
+        - name
+        - characterName
+        - race
+        - class
+        - background
+        - hp
+        - maxHp
+        - ac
+        - level
+        - stats
+        - createdAt
+
+    PlayerInput:
+      type: object
+      properties:
+        name:
+          type: string
+        characterName:
+          type: string
+        race:
+          type: string
+        class:
+          type: string
+        background:
+          type: string
+        hp:
+          type: integer
+        maxHp:
+          type: integer
+        ac:
+          type: integer
+        level:
+          type: integer
+        stats:
+          type: string
+      required:
+        - name
+        - characterName
+        - race
+        - class
+        - background
+        - hp
+        - maxHp
+        - ac
+        - level
+        - stats
+
+    PlayerUpdate:
+      type: object
+      properties:
+        hp:
+          type: integer
+        maxHp:
+          type: integer
+        ac:
+          type: integer
+        stats:
+          type: string
+
+    DiceRollInput:
+      type: object
+      properties:
+        playerId:
+          type: integer
+        diceType:
+          type: string
+        result:
+          type: integer
+        purpose:
+          type: string
+      required:
+        - playerId
+        - diceType
+        - result
+        - purpose
+
+    DiceRollResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        playerId:
+          type: integer
+        diceType:
+          type: string
+        result:
+          type: integer
+        purpose:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - playerId
+        - diceType
+        - result
+        - purpose
+        - createdAt
+
+    GmMessageInput:
+      type: object
+      properties:
+        playerId:
+          type: integer
+        action:
+          type: string
+        diceRollId:
+          type: ["integer", "null"]
+      required:
+        - playerId
+        - action
+
+    NarrativeEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        playerId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - sessionId
+        - role
+        - content
+        - playerId
+        - createdAt
+
+    DiceRollEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        playerId:
+          type: integer
+        characterName:
+          type: string
+        diceType:
+          type: string
+        result:
+          type: integer
+        purpose:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - playerId
+        - characterName
+        - diceType
+        - result
+        - purpose
+        - createdAt
+
+    CampaignError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
