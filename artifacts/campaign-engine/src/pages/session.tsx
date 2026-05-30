@@ -26,7 +26,7 @@ export default function Session() {
   const { id } = useParams();
   const sessionId = parseInt(id || "0", 10);
 
-  const { data: session, isLoading: sessionLoading } = useGetCampaignSession(sessionId, {
+  const { data: session, isLoading: sessionLoading, refetch: refetchSession } = useGetCampaignSession(sessionId, {
     query: { enabled: !!sessionId, queryKey: getGetCampaignSessionQueryKey(sessionId) }
   });
 
@@ -57,6 +57,8 @@ export default function Session() {
   const [rollPurpose, setRollPurpose] = useState("");
   const [activeRollId, setActiveRollId] = useState<number | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(null);
+  const [worldStateUpdated, setWorldStateUpdated] = useState(false);
+  const prevWorldStateRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (players && players.length > 0 && !selectedPlayerId) {
@@ -69,6 +71,17 @@ export default function Session() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [narrative, isStreaming]);
+
+  useEffect(() => {
+    if (session?.worldState && prevWorldStateRef.current !== undefined && prevWorldStateRef.current !== session.worldState) {
+      setWorldStateUpdated(true);
+      const t = setTimeout(() => setWorldStateUpdated(false), 4000);
+      return () => clearTimeout(t);
+    }
+    if (session?.worldState) {
+      prevWorldStateRef.current = session.worldState;
+    }
+  }, [session?.worldState]);
 
   useEffect(() => {
     if (history && !narrativeRef.current && !isStreaming) {
@@ -107,6 +120,11 @@ export default function Session() {
         refetchHistory();
         refetchPlayers();
         refetchDiceRolls();
+        setTimeout(() => refetchSession(), 3500);
+        break;
+      }
+      case "world_state_update": {
+        setTimeout(() => refetchSession(), 500);
         break;
       }
       case "dice_roll": {
@@ -213,6 +231,10 @@ export default function Session() {
                 setIsStreaming(false);
                 refetchHistory();
                 broadcast({ type: "gm_done" });
+                setTimeout(() => {
+                  refetchSession();
+                  broadcast({ type: "world_state_update" });
+                }, 3500);
               }
             } catch {
               // ignore partial chunk
@@ -467,10 +489,31 @@ export default function Session() {
           </div>
 
           <div className="mb-4">
-            <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">世界狀態</div>
-            <div className="text-sm italic leading-relaxed text-foreground/80 p-2 bg-background rounded border border-border">
-              {session?.worldState || "未知的領域..."}
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider">世界狀態</div>
+              <AnimatePresence>
+                {worldStateUpdated && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    className="flex items-center gap-1 text-[10px] text-primary font-mono"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse inline-block" />
+                    已更新
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
+            <motion.div
+              key={session?.worldState}
+              initial={worldStateUpdated ? { opacity: 0, y: -4 } : false}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className={`text-sm italic leading-relaxed text-foreground/80 p-2 bg-background rounded border transition-colors duration-700 ${worldStateUpdated ? "border-primary/50 shadow-[0_0_8px_rgba(200,140,50,0.15)]" : "border-border"}`}
+            >
+              {session?.worldState || "未知的領域..."}
+            </motion.div>
           </div>
 
           <div className="border-t border-border pt-3 flex-1 flex flex-col min-h-0">

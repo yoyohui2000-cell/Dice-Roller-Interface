@@ -19,7 +19,7 @@ import {
   GetSessionHistoryParams,
 } from "@workspace/api-zod";
 import { logger } from "../../lib/logger";
-import { GM_SYSTEM_PROMPT, buildChatHistory } from "../../lib/gm-prompt";
+import { GM_SYSTEM_PROMPT, WORLD_STATE_EVALUATOR_PROMPT, buildChatHistory, buildWorldStateEvalMessages } from "../../lib/gm-prompt";
 
 const router: IRouter = Router();
 
@@ -239,11 +239,38 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
     });
 
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
+
+    // Fire-and-forget world state evaluation — runs after SSE closes, never blocks players
+    (async () => {
+      try {
+        const evalMessages = buildWorldStateEvalMessages(session.worldState, fullResponse);
+        const evalResult = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: evalMessages,
+          config: {
+            maxOutputTokens: 512,
+            systemInstruction: WORLD_STATE_EVALUATOR_PROMPT,
+          },
+        });
+        const newWorldState = evalResult.text?.trim();
+        if (newWorldState && newWorldState !== "null" && newWorldState.length > 20) {
+          await db
+            .update(campaignSessions)
+            .set({ worldState: newWorldState, updatedAt: new Date() })
+            .where(eq(campaignSessions.id, params.data.id));
+          logger.info({ sessionId: params.data.id }, "World state updated by GM evaluator");
+        }
+      } catch (err) {
+        logger.error({ err }, "World state evaluator error");
+      }
+    })();
+
   } catch (err) {
     logger.error({ err }, "GM stream error");
     res.write(`data: ${JSON.stringify({ error: "GM error" })}\n\n`);
+    res.end();
   }
-  res.end();
 });
 
 router.get("/campaign/sessions/:id/history", async (req, res): Promise<void> => {

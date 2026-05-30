@@ -6,6 +6,7 @@ export type RealtimeEvent =
   | { type: "player_action"; playerId: number; characterName: string; action: string; rollInfo?: string }
   | { type: "gm_chunk"; chunk: string }
   | { type: "gm_done" }
+  | { type: "world_state_update" }
   | { type: "dice_roll"; playerId: number; characterName: string; diceType: string; result: number; purpose: string }
   | { type: "player_joined"; characterName: string; race: string; class: string }
   | { type: "player_hp_update"; playerId: number; characterName: string; hp: number; maxHp: number };
