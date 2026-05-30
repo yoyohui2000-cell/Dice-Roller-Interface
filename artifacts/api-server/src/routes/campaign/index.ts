@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, conversations, campaignSessions, players, diceRolls, narrativeHistory } from "@workspace/db";
+import { db, conversations, campaignSessions, players, diceRolls, narrativeHistory, npcs } from "@workspace/db";
 import { ai } from "@workspace/integrations-gemini-ai";
 import {
   CreateCampaignSessionBody,
@@ -19,7 +19,15 @@ import {
   GetSessionHistoryParams,
 } from "@workspace/api-zod";
 import { logger } from "../../lib/logger";
-import { GM_SYSTEM_PROMPT, WORLD_STATE_EVALUATOR_PROMPT, buildChatHistory, buildWorldStateEvalMessages } from "../../lib/gm-prompt";
+import {
+  GM_SYSTEM_PROMPT,
+  WORLD_STATE_EVALUATOR_PROMPT,
+  NPC_EXTRACTOR_PROMPT,
+  buildChatHistory,
+  buildWorldStateEvalMessages,
+  buildNpcContext,
+  parseTurnState,
+} from "../../lib/gm-prompt";
 
 const router: IRouter = Router();
 
@@ -181,6 +189,9 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
     .where(eq(narrativeHistory.sessionId, params.data.id))
     .orderBy(narrativeHistory.createdAt);
 
+  const sessionNpcs = await db.select().from(npcs).where(eq(npcs.sessionId, params.data.id));
+  const npcContext = buildNpcContext(sessionNpcs);
+
   let diceInfo: { diceType: string; result: number; purpose: string; playerName: string } | null = null;
   if (body.data.diceRollId) {
     const [roll] = await db.select().from(diceRolls).where(eq(diceRolls.id, body.data.diceRollId));
@@ -206,7 +217,7 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
     playerId: body.data.playerId,
   });
 
-  const chatHistory = buildChatHistory(history, sessionPlayers, diceInfo, fullAction);
+  const chatHistory = buildChatHistory(history, sessionPlayers, npcContext, diceInfo, fullAction);
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -219,7 +230,7 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
       contents: chatHistory,
       config: {
         maxOutputTokens: 8192,
-        systemInstruction: GM_SYSTEM_PROMPT,
+        systemInstruction: `${GM_SYSTEM_PROMPT}\n\n## 當前世界狀態\n${session.worldState}`,
       },
     });
 
@@ -231,38 +242,74 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
       }
     }
 
+    const { cleanText, turnState } = parseTurnState(fullResponse);
+
     await db.insert(narrativeHistory).values({
       sessionId: params.data.id,
       role: "assistant",
-      content: fullResponse,
+      content: cleanText,
       playerId: null,
     });
 
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.write(`data: ${JSON.stringify({ done: true, turnState })}\n\n`);
     res.end();
 
-    // Fire-and-forget world state evaluation — runs after SSE closes, never blocks players
+    // Background: world state evaluation + NPC extraction — never blocks players
     (async () => {
       try {
-        const evalMessages = buildWorldStateEvalMessages(session.worldState, fullResponse);
-        const evalResult = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: evalMessages,
-          config: {
-            maxOutputTokens: 512,
-            systemInstruction: WORLD_STATE_EVALUATOR_PROMPT,
-          },
-        });
+        const evalMessages = buildWorldStateEvalMessages(session.worldState, cleanText);
+        const [evalResult, npcResult] = await Promise.all([
+          ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: evalMessages,
+            config: { maxOutputTokens: 512, systemInstruction: WORLD_STATE_EVALUATOR_PROMPT },
+          }),
+          ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: [{ role: "user", parts: [{ text: `GM回應：\n${cleanText}` }] }],
+            config: { maxOutputTokens: 1024, systemInstruction: NPC_EXTRACTOR_PROMPT },
+          }),
+        ]);
+
         const newWorldState = evalResult.text?.trim();
         if (newWorldState && newWorldState !== "null" && newWorldState.length > 20) {
           await db
             .update(campaignSessions)
             .set({ worldState: newWorldState, updatedAt: new Date() })
             .where(eq(campaignSessions.id, params.data.id));
-          logger.info({ sessionId: params.data.id }, "World state updated by GM evaluator");
+          logger.info({ sessionId: params.data.id }, "World state updated");
+        }
+
+        const npcJson = npcResult.text?.trim();
+        if (npcJson && npcJson !== "null") {
+          try {
+            const extractedNpcs = JSON.parse(npcJson) as Array<{
+              name: string; location: string; attitude: string;
+              secrets: string; goals: string; notes: string;
+            }>;
+            if (Array.isArray(extractedNpcs)) {
+              for (const npc of extractedNpcs) {
+                await db.insert(npcs)
+                  .values({ sessionId: params.data.id, ...npc })
+                  .onConflictDoUpdate({
+                    target: [npcs.sessionId, npcs.name],
+                    set: {
+                      location: npc.location,
+                      attitude: npc.attitude,
+                      secrets: npc.secrets,
+                      goals: npc.goals,
+                      notes: npc.notes,
+                    },
+                  });
+              }
+              logger.info({ sessionId: params.data.id, count: extractedNpcs.length }, "NPCs extracted");
+            }
+          } catch (parseErr) {
+            logger.warn({ parseErr, npcJson }, "NPC JSON parse failed");
+          }
         }
       } catch (err) {
-        logger.error({ err }, "World state evaluator error");
+        logger.error({ err }, "Background eval error");
       }
     })();
 
@@ -271,6 +318,22 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
     res.write(`data: ${JSON.stringify({ error: "GM error" })}\n\n`);
     res.end();
   }
+});
+
+router.get("/campaign/sessions/:id/npcs", async (req, res): Promise<void> => {
+  const params = GetCampaignSessionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const sessionNpcs = await db.select().from(npcs)
+    .where(eq(npcs.sessionId, params.data.id))
+    .orderBy(npcs.updatedAt);
+  res.json(sessionNpcs.map(n => ({
+    ...n,
+    createdAt: n.createdAt.toISOString(),
+    updatedAt: n.updatedAt.toISOString(),
+  })));
 });
 
 router.get("/campaign/sessions/:id/history", async (req, res): Promise<void> => {

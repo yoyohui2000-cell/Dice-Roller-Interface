@@ -2,10 +2,13 @@ import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
+export type TurnState = { who: string; dice: string | null; purpose: string | null };
+
 export type RealtimeEvent =
   | { type: "player_action"; playerId: number; characterName: string; action: string; rollInfo?: string }
   | { type: "gm_chunk"; chunk: string }
-  | { type: "gm_done" }
+  | { type: "gm_done"; turnState?: TurnState }
+  | { type: "turn_change"; who: string; dice: string | null; purpose: string | null }
   | { type: "world_state_update" }
   | { type: "dice_roll"; playerId: number; characterName: string; diceType: string; result: number; purpose: string }
   | { type: "player_joined"; characterName: string; race: string; class: string }
