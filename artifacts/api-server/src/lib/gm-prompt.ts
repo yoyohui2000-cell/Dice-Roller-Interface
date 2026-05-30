@@ -160,12 +160,18 @@ export function parseTurnState(text: string): { cleanText: string; turnState: Tu
     workingText = workingText.replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "");
   }
 
-  const marker = /\n?%%TURN:(\{[^%]+\})%%\s*$/s;
-  const match = workingText.match(marker);
-  if (!match) return { cleanText: workingText.trimEnd(), turnState: defaultState, combatState };
+  // Find ALL occurrences of %%TURN%% in the response (GM sometimes puts it mid-text)
+  // and use the LAST one found, then strip all of them from the clean text.
+  const turnPattern = /%%TURN:(\{[^%]+?\})%%/gs;
+  let lastTurnMatch: RegExpExecArray | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = turnPattern.exec(workingText)) !== null) {
+    lastTurnMatch = m;
+  }
+  if (!lastTurnMatch) return { cleanText: workingText.trimEnd(), turnState: defaultState, combatState };
   try {
-    const turnState = JSON.parse(match[1]) as TurnState;
-    const cleanText = workingText.replace(marker, "").trimEnd();
+    const turnState = JSON.parse(lastTurnMatch[1]) as TurnState;
+    const cleanText = workingText.replace(/\n?%%TURN:\{[^%]+?\}%%[ \t]*/gs, "").trimEnd();
     return { cleanText, turnState, combatState };
   } catch {
     return { cleanText: workingText.trimEnd(), turnState: defaultState, combatState };

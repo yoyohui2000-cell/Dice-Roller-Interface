@@ -322,7 +322,7 @@ export default function Session() {
               if (data.done) {
                 narrativeRef.current = narrativeRef.current
                   .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
-                  .replace(/\n?%%TURN:\{[^%]*\}%%\s*$/, "")
+                  .replace(/\n?%%TURN:\{[^%]+?\}%%[ \t]*/gs, "")
                   .trimEnd() + "\n\n";
                 setNarrative(narrativeRef.current);
                 setIsStreaming(false);
@@ -341,6 +341,8 @@ export default function Session() {
                 broadcast({ type: "turn_change", ...newTurnState });
 
                 refetchHistory();
+                refetchPlayers();
+                refetchDiceRolls();
                 setTimeout(() => {
                   refetchSession();
                   broadcast({ type: "world_state_update" });
