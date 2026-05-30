@@ -501,17 +501,6 @@ export default function Session() {
           <div className="border-t border-border bg-card relative z-10 shadow-[0_-4px_20px_rgba(0,0,0,0.5)]">
 
             <AnimatePresence>
-              {turnState.dice !== null && isMyTurn && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="flex items-center gap-2 px-4 py-2 bg-amber-950/60 border-b border-amber-700/40 text-amber-300 text-sm font-serif overflow-hidden"
-                >
-                  <Dices className="w-4 h-4 animate-pulse shrink-0" />
-                  <span>GM 要求擲骰：請擲 <strong>{turnState.dice}</strong>{turnState.purpose ? ` — ${turnState.purpose}` : ""}</span>
-                </motion.div>
-              )}
               {!isMyTurn && !isStreaming && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
@@ -523,105 +512,139 @@ export default function Session() {
                   <span>等待 <strong className="text-foreground">{turnState.who}</strong> 行動中...</span>
                 </motion.div>
               )}
+              {isStreaming && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex items-center gap-2 px-4 py-2 bg-card border-b border-border text-muted-foreground text-sm font-serif overflow-hidden"
+                >
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                    className="w-3.5 h-3.5 border-2 border-primary/60 border-t-transparent rounded-full shrink-0"
+                  />
+                  <span>GM 正在回應中...</span>
+                </motion.div>
+              )}
             </AnimatePresence>
 
             <div className="p-4">
-              <div className="mb-3 bg-background p-3 rounded border border-border flex items-center gap-4">
-                <Dices className={`w-6 h-6 shrink-0 ${turnState.dice !== null ? 'text-amber-400' : 'text-primary/30'}`} />
-                <div className="flex gap-2 flex-wrap flex-1">
-                  {[4, 6, 8, 10, 12, 20, 100].map(max => {
-                    const diceLabel = `D${max}`;
-                    const isRequired = turnState.dice === diceLabel;
-                    const isRolling = rollingDice === diceLabel;
-                    const disabled = !selectedPlayerId || isStreaming || !isMyTurn ||
-                      turnState.dice !== null ? !isRequired : true;
-                    return (
-                      <Button
-                        key={diceLabel}
-                        variant={isRequired ? "default" : "outline"}
-                        className={`font-mono font-bold transition-all ${
-                          isRequired
-                            ? 'bg-primary text-primary-foreground hover:bg-primary/80 shadow-[0_0_15px_rgba(200,140,50,0.5)] scale-105'
-                            : turnState.dice !== null
-                              ? 'border-border text-muted-foreground/30 opacity-30'
-                              : 'border-primary/20 text-primary/40 opacity-50'
-                        }`}
-                        onClick={() => executeRoll(diceLabel, max)}
-                        disabled={!!disabled || isRolling}
-                      >
-                        {diceLabel}
-                      </Button>
-                    );
-                  })}
-                </div>
-
-                <AnimatePresence>
-                  {rollingDice && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.8, x: -20 }}
-                      animate={{ opacity: 1, scale: 1, x: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="flex items-center gap-3 bg-card px-4 py-2 rounded border border-primary/50 ml-auto shadow-[0_0_15px_rgba(200,140,50,0.2)]"
-                    >
-                      <span className="font-serif text-muted-foreground">{rollingDice}</span>
-                      {rollResult === null ? (
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ repeat: Infinity, duration: 0.5, ease: "linear" }}
-                          className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full"
-                        />
-                      ) : (
-                        <motion.div className="flex flex-col items-center">
-                          <motion.span
-                            initial={{ scale: 2, color: '#fff' }}
-                            animate={{ scale: 1, color: 'hsl(var(--primary))' }}
-                            className="font-bold text-2xl font-mono leading-none"
-                          >
-                            {rollResult}
-                          </motion.span>
-                          {turnState.dice !== null && (
-                            <span className="text-[10px] text-amber-400/70 font-mono animate-pulse">提交中...</span>
-                          )}
-                        </motion.div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Input
-                  value={rollPurpose}
-                  onChange={e => setRollPurpose(e.target.value)}
-                  placeholder="擲骰目的 (例如：察覺、攻擊)..."
-                  className="bg-background border-border text-sm max-w-sm"
-                  readOnly={turnState.dice !== null}
-                  disabled={!selectedPlayerId || isStreaming || !isMyTurn || turnState.dice !== null}
-                />
-                <div className="flex gap-2">
-                  <Input
-                    value={action}
-                    onChange={e => setAction(e.target.value)}
-                    placeholder={
-                      !selectedPlayerId ? "請先選擇左側角色..." :
-                      !isMyTurn ? `等待 ${turnState.who} 行動中...` :
-                      turnState.dice !== null ? `請先依上方指示擲骰...` :
-                      "描述你的行動或說話..."
-                    }
-                    className="flex-1 bg-background border-primary/30 focus-visible:ring-primary text-lg py-6"
-                    onKeyDown={e => e.key === 'Enter' && !turnState.dice && handleSend()}
-                    disabled={!selectedPlayerId || isStreaming || !isMyTurn || turnState.dice !== null}
-                  />
-                  <Button
-                    onClick={handleSend}
-                    disabled={isStreaming || !action.trim() || !selectedPlayerId || !isMyTurn || turnState.dice !== null}
-                    className="h-auto px-8 text-lg font-serif"
+              <AnimatePresence mode="wait">
+                {isMyTurn && turnState.dice !== null && !isStreaming ? (
+                  /* ── DICE MODE ── */
+                  <motion.div
+                    key="dice-mode"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="space-y-3"
                   >
-                    <Send className="w-5 h-5 mr-2" />
-                    行動
-                  </Button>
-                </div>
-              </div>
+                    <div className="flex items-center gap-2 text-sm font-serif text-amber-300 bg-amber-950/50 rounded px-3 py-2 border border-amber-700/40">
+                      <Dices className="w-4 h-4 animate-pulse shrink-0" />
+                      <span>GM 要求擲骰：請擲 <strong>{turnState.dice}</strong>{turnState.purpose ? ` — ${turnState.purpose}` : ""}</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="text-xs text-amber-400/80 font-mono tracking-wider">① 填寫擲骰目的</div>
+                      <Input
+                        value={rollPurpose}
+                        onChange={e => setRollPurpose(e.target.value)}
+                        placeholder="例如：感知檢定、攻擊判定..."
+                        className="bg-background border-amber-700/40 focus-visible:ring-amber-600 text-sm"
+                        disabled={!!rollingDice}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="text-xs text-amber-400/80 font-mono tracking-wider">② 點擊擲骰</div>
+                      <div className="flex items-center gap-3">
+                        {[4, 6, 8, 10, 12, 20, 100].map(max => {
+                          const diceLabel = `D${max}`;
+                          if (turnState.dice !== diceLabel) return null;
+                          return (
+                            <Button
+                              key={diceLabel}
+                              onClick={() => executeRoll(diceLabel, max)}
+                              disabled={!rollPurpose.trim() || !!rollingDice}
+                              className="font-mono font-bold text-base px-8 py-5 bg-primary text-primary-foreground hover:bg-primary/80 shadow-[0_0_20px_rgba(200,140,50,0.4)] disabled:opacity-40 disabled:shadow-none transition-all"
+                            >
+                              <Dices className="w-4 h-4 mr-2" />
+                              擲 {diceLabel}
+                            </Button>
+                          );
+                        })}
+
+                        <AnimatePresence>
+                          {rollingDice && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                              animate={{ opacity: 1, scale: 1, x: 0 }}
+                              exit={{ opacity: 0 }}
+                              className="flex items-center gap-3 bg-card px-4 py-2 rounded border border-primary/50 shadow-[0_0_15px_rgba(200,140,50,0.2)]"
+                            >
+                              <span className="font-serif text-muted-foreground">{rollingDice}</span>
+                              {rollResult === null ? (
+                                <motion.div
+                                  animate={{ rotate: 360 }}
+                                  transition={{ repeat: Infinity, duration: 0.5, ease: "linear" }}
+                                  className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full"
+                                />
+                              ) : (
+                                <motion.div className="flex flex-col items-center">
+                                  <motion.span
+                                    initial={{ scale: 2, color: '#fff' }}
+                                    animate={{ scale: 1, color: 'hsl(var(--primary))' }}
+                                    className="font-bold text-2xl font-mono leading-none"
+                                  >
+                                    {rollResult}
+                                  </motion.span>
+                                  <span className="text-[10px] text-amber-400/70 font-mono animate-pulse">提交中...</span>
+                                </motion.div>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        {!rollPurpose.trim() && !rollingDice && (
+                          <span className="text-xs text-muted-foreground font-serif italic">請先填寫擲骰目的再擲骰</span>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : (
+                  /* ── ACTION MODE ── */
+                  <motion.div
+                    key="action-mode"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="flex gap-2"
+                  >
+                    <Input
+                      value={action}
+                      onChange={e => setAction(e.target.value)}
+                      placeholder={
+                        !selectedPlayerId ? "請先選擇左側角色..." :
+                        isStreaming ? "GM 正在回應中..." :
+                        !isMyTurn ? `等待 ${turnState.who} 行動中...` :
+                        "描述你的行動或說話..."
+                      }
+                      className="flex-1 bg-background border-primary/30 focus-visible:ring-primary text-lg py-6"
+                      onKeyDown={e => e.key === 'Enter' && handleSend()}
+                      disabled={!selectedPlayerId || isStreaming || !isMyTurn}
+                    />
+                    <Button
+                      onClick={handleSend}
+                      disabled={isStreaming || !action.trim() || !selectedPlayerId || !isMyTurn}
+                      className="h-auto px-8 text-lg font-serif"
+                    >
+                      <Send className="w-5 h-5 mr-2" />
+                      行動
+                    </Button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </main>
