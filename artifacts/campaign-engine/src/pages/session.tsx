@@ -304,57 +304,71 @@ export default function Session() {
       if (!res.body) throw new Error("No response body");
 
       const reader = res.body.getReader();
-      const decoder = new TextDecoder();
+      // Use {stream: true} so multi-byte UTF-8 chars across chunk boundaries decode correctly
+      const decoder = new TextDecoder("utf-8", { fatal: false });
+      // Buffer accumulates raw bytes across chunks; SSE events are delimited by "\n\n"
+      let sseBuffer = "";
+
+      const processEvent = (eventText: string) => {
+        for (const line of eventText.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.content) {
+              narrativeRef.current += data.content;
+              setNarrative(narrativeRef.current);
+              broadcast({ type: "gm_chunk", chunk: data.content });
+            }
+            if (data.done) {
+              narrativeRef.current = narrativeRef.current
+                .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
+                .replace(/\n?%%TURN:\{[^%]+?\}%%[ \t]*/gs, "")
+                .trimEnd() + "\n\n";
+              setNarrative(narrativeRef.current);
+              setIsStreaming(false);
+
+              const newTurnState: TurnState = data.turnState ?? { who: "全體", dice: null, purpose: null };
+              setTurnState(newTurnState);
+
+              if (data.combatState !== undefined) {
+                const newCombatState: CombatState = data.combatState as CombatState;
+                setCombatState(newCombatState);
+                if (newCombatState !== null) setSidebarTab("combat");
+                broadcast({ type: "combat_update", combatState: newCombatState });
+              }
+
+              broadcast({ type: "gm_done", turnState: newTurnState, combatState: data.combatState as CombatState | undefined });
+              broadcast({ type: "turn_change", ...newTurnState });
+
+              refetchHistory();
+              refetchPlayers();
+              refetchDiceRolls();
+              setTimeout(() => {
+                refetchSession();
+                broadcast({ type: "world_state_update" });
+              }, 3500);
+              setTimeout(() => fetchNpcs(), 3000);
+            }
+          } catch {
+            // malformed JSON in this line — skip
+          }
+        }
+      };
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const text = decoder.decode(value);
-        for (const line of text.split("\n")) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.content) {
-                narrativeRef.current += data.content;
-                setNarrative(narrativeRef.current);
-                broadcast({ type: "gm_chunk", chunk: data.content });
-              }
-              if (data.done) {
-                narrativeRef.current = narrativeRef.current
-                  .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
-                  .replace(/\n?%%TURN:\{[^%]+?\}%%[ \t]*/gs, "")
-                  .trimEnd() + "\n\n";
-                setNarrative(narrativeRef.current);
-                setIsStreaming(false);
-
-                const newTurnState: TurnState = data.turnState ?? { who: "全體", dice: null, purpose: null };
-                setTurnState(newTurnState);
-
-                if (data.combatState !== undefined) {
-                  const newCombatState: CombatState = data.combatState as CombatState;
-                  setCombatState(newCombatState);
-                  if (newCombatState !== null) setSidebarTab("combat");
-                  broadcast({ type: "combat_update", combatState: newCombatState });
-                }
-
-                broadcast({ type: "gm_done", turnState: newTurnState, combatState: data.combatState as CombatState | undefined });
-                broadcast({ type: "turn_change", ...newTurnState });
-
-                refetchHistory();
-                refetchPlayers();
-                refetchDiceRolls();
-                setTimeout(() => {
-                  refetchSession();
-                  broadcast({ type: "world_state_update" });
-                }, 3500);
-                setTimeout(() => fetchNpcs(), 3000);
-              }
-            } catch {
-              // ignore partial chunk
-            }
-          }
+        sseBuffer += decoder.decode(value, { stream: true });
+        // Split on the SSE event delimiter "\n\n" — each complete event is processed,
+        // the trailing partial event (if any) stays in the buffer for the next chunk.
+        const events = sseBuffer.split("\n\n");
+        sseBuffer = events.pop() ?? "";
+        for (const event of events) {
+          if (event.trim()) processEvent(event);
         }
       }
+      // Flush any remaining complete event in the buffer
+      if (sseBuffer.trim()) processEvent(sseBuffer);
     } catch (err) {
       setIsStreaming(false);
       setTurnState({ who: "全體", dice: null, purpose: null });
