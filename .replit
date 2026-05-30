@@ -49,8 +49,9 @@ args = "PORT=23792 BASE_PATH=/ pnpm --filter @workspace/campaign-engine run dev"
 waitForPort = 23792
 
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
+integrations = ["javascript_gemini_ai_integrations:2.0.0"]
 
 [postMerge]
 path = "scripts/post-merge.sh"
