@@ -45,8 +45,8 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=23792 BASE_PATH=/ pnpm --filter @workspace/campaign-engine run dev"
-waitForPort = 23792
+args = "PORT=5000 BASE_PATH=/ pnpm --filter @workspace/campaign-engine run dev"
+waitForPort = 5000
 
 [agent]
 stack = "BEST_EFFORT_FALLBACK"
@@ -56,6 +56,10 @@ integrations = ["javascript_gemini_ai_integrations:2.0.0"]
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
 
 [[ports]]
 localPort = 8080
