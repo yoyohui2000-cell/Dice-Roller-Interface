@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { ChevronRight, ChevronLeft, Check, Sword, Wand2, Zap, Shield, Leaf, Music, Flame, Skull, Star, BookOpen, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_STATS } from "@/components/character-sheet";
@@ -345,26 +345,29 @@ export default function CharacterCreationDialog({ open, onOpenChange, onSubmit, 
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="bg-card border-border max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0">
-        <DialogHeader className="px-6 pt-5 pb-0">
-          <DialogTitle className="font-serif text-2xl text-primary">
-            {isJoinLink ? "加入冒險！" : "創造新角色"}
-          </DialogTitle>
+      <DialogContent className="bg-card border-border w-[95vw] max-w-2xl max-h-[90svh] flex flex-col gap-0 p-0 overflow-hidden">
+        <DialogHeader className="px-4 sm:px-6 pt-4 pb-0 shrink-0">
+          <div className="flex items-center justify-between">
+            <DialogTitle className="font-serif text-xl sm:text-2xl text-primary">
+              {isJoinLink ? "加入冒險！" : "創造新角色"}
+            </DialogTitle>
+            <span className="text-xs text-muted-foreground font-mono">{stepIdx + 1} / {STEPS.length}</span>
+          </div>
           {isJoinLink && sessionName && (
-            <DialogDescription className="font-serif text-muted-foreground">
-              你的朋友邀請你加入《{sessionName}》。
+            <DialogDescription className="font-serif text-sm text-muted-foreground">
+              加入《{sessionName}》
             </DialogDescription>
           )}
 
-          <div className="flex items-center gap-1 mt-3">
+          <div className="flex items-center gap-1 mt-2">
             {STEPS.map((s, i) => (
               <React.Fragment key={s}>
-                <div className={cn("flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold border transition-colors",
+                <div className={cn("flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-bold border transition-colors shrink-0",
                   i < stepIdx ? "bg-primary border-primary text-primary-foreground" :
                   i === stepIdx ? "border-primary text-primary bg-primary/10" :
                   "border-border text-muted-foreground"
                 )}>
-                  {i < stepIdx ? <Check className="w-3 h-3" /> : i + 1}
+                  {i < stepIdx ? <Check className="w-2.5 h-2.5" /> : i + 1}
                 </div>
                 {i < STEPS.length - 1 && (
                   <div className={cn("flex-1 h-px transition-colors", i < stepIdx ? "bg-primary" : "bg-border")} />
@@ -372,12 +375,12 @@ export default function CharacterCreationDialog({ open, onOpenChange, onSubmit, 
               </React.Fragment>
             ))}
           </div>
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5 px-0.5">
+          <div className="flex justify-between text-[9px] text-muted-foreground mt-0.5 px-0.5 pb-1">
             <span>名字</span><span>種族</span><span>職業</span><span>能力值</span><span>確認</span>
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 px-6 pb-2">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 pb-2" style={{ WebkitOverflowScrolling: "touch" }}>
           <div className="py-4">
 
             {/* Step 1: Names */}
@@ -411,32 +414,32 @@ export default function CharacterCreationDialog({ open, onOpenChange, onSubmit, 
             {/* Step 2: Race */}
             {step === "race" && (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">選擇你的種族，每個種族賦予不同的天賦與加成。</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <p className="text-xs text-muted-foreground">選擇你的種族，每個種族賦予不同的天賦與加成。</p>
+                <div className="grid grid-cols-2 gap-2">
                   {RACES.map(r => (
                     <button
                       key={r.value}
                       type="button"
                       onClick={() => setSelectedRace(r.value)}
                       className={cn(
-                        "text-left rounded-lg border-2 p-3 transition-all",
+                        "text-left rounded-lg border-2 p-2 sm:p-3 transition-all",
                         r.color,
                         selectedRace === r.value ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""
                       )}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <div>
-                          <span className="font-serif text-base text-foreground">{r.label}</span>
-                          <span className="text-muted-foreground text-xs ml-2">{r.subtitle}</span>
+                        <div className="min-w-0">
+                          <div className="font-serif text-sm sm:text-base text-foreground truncate">{r.label}</div>
+                          <div className="text-muted-foreground text-[10px]">{r.subtitle}</div>
                         </div>
-                        {selectedRace === r.value && <Check className="w-4 h-4 text-primary shrink-0" />}
+                        {selectedRace === r.value && <Check className="w-3.5 h-3.5 text-primary shrink-0 ml-1" />}
                       </div>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {r.traits.slice(0, 3).map(t => (
-                          <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-background/60 text-muted-foreground border border-border/50">{t}</span>
+                        {r.traits.slice(0, 2).map(t => (
+                          <span key={t} className="text-[9px] px-1 py-0.5 rounded bg-background/60 text-muted-foreground border border-border/50 leading-tight">{t}</span>
                         ))}
                       </div>
-                      <div className="text-[10px] text-muted-foreground mt-1">速度 {r.speed}尺</div>
+                      <div className="text-[9px] text-muted-foreground mt-1">速度 {r.speed}尺</div>
                     </button>
                   ))}
                 </div>
@@ -446,33 +449,33 @@ export default function CharacterCreationDialog({ open, onOpenChange, onSubmit, 
             {/* Step 3: Class */}
             {step === "class" && (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">選擇你的職業，決定你的戰鬥風格與特殊能力。</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <p className="text-xs text-muted-foreground">選擇你的職業，決定你的戰鬥風格與特殊能力。</p>
+                <div className="grid grid-cols-2 gap-2">
                   {CLASSES.map(c => (
                     <button
                       key={c.value}
                       type="button"
                       onClick={() => setSelectedClass(c.value)}
                       className={cn(
-                        "text-left rounded-lg border-2 p-3 transition-all",
+                        "text-left rounded-lg border-2 p-2 sm:p-3 transition-all",
                         c.color,
                         selectedClass === c.value ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""
                       )}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-primary/80">{c.icon}</span>
-                          <div>
-                            <span className="font-serif text-base text-foreground">{c.label}</span>
-                            <span className="text-muted-foreground text-xs ml-2">{c.subtitle}</span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-primary/80 shrink-0">{c.icon}</span>
+                          <div className="min-w-0">
+                            <div className="font-serif text-sm sm:text-base text-foreground truncate">{c.label}</div>
+                            <div className="text-muted-foreground text-[10px]">{c.subtitle}</div>
                           </div>
                         </div>
-                        {selectedClass === c.value && <Check className="w-4 h-4 text-primary shrink-0" />}
+                        {selectedClass === c.value && <Check className="w-3.5 h-3.5 text-primary shrink-0 ml-1" />}
                       </div>
-                      <p className="text-[11px] text-muted-foreground mb-1.5">{c.description}</p>
-                      <div className="flex gap-2 text-[10px]">
-                        <span className="px-1.5 py-0.5 rounded bg-background/60 border border-border/50 text-muted-foreground">骰 d{c.hitDie}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-background/60 border border-border/50 text-muted-foreground">預設AC {c.defaultAc}</span>
+                      <p className="text-[10px] text-muted-foreground mb-1.5 line-clamp-2">{c.description}</p>
+                      <div className="flex gap-1 text-[9px] flex-wrap">
+                        <span className="px-1 py-0.5 rounded bg-background/60 border border-border/50 text-muted-foreground">d{c.hitDie}</span>
+                        <span className="px-1 py-0.5 rounded bg-background/60 border border-border/50 text-muted-foreground">AC {c.defaultAc}</span>
                       </div>
                     </button>
                   ))}
@@ -667,9 +670,9 @@ export default function CharacterCreationDialog({ open, onOpenChange, onSubmit, 
             )}
 
           </div>
-        </ScrollArea>
+        </div>
 
-        <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-card">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-t border-border bg-card">
           <Button
             type="button"
             variant="ghost"
