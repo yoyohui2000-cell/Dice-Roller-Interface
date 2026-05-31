@@ -18,6 +18,11 @@ if (Number.isNaN(port) || port <= 0) {
 
 const server = createServer(app);
 
+server.keepAliveTimeout = 70_000;
+server.headersTimeout = 71_000;
+server.requestTimeout = 0;
+server.timeout = 0;
+
 server.listen(port, (err?: Error) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
