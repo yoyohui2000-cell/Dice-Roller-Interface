@@ -18,7 +18,7 @@ export type CombatState = { round: number; order: CombatEntry[] } | null;
 export type RealtimeEvent =
   | { type: "player_action"; playerId: number; characterName: string; action: string; rollInfo?: string }
   | { type: "gm_chunk"; chunk: string }
-  | { type: "gm_done"; turnState?: TurnState; combatState?: CombatState }
+  | { type: "gm_done"; turnState?: TurnState; combatState?: CombatState; playerUpdates?: unknown[]; gmPlayerChanges?: unknown[] }
   | { type: "turn_change"; who: string; dice: string | null; purpose: string | null }
   | { type: "world_state_update" }
   | { type: "combat_update"; combatState: CombatState }
@@ -29,12 +29,15 @@ export type RealtimeEvent =
 interface UseRealtimeSessionOptions {
   sessionId: number;
   onEvent: (event: RealtimeEvent) => void;
+  onStatusChange?: (connected: boolean) => void;
 }
 
-export function useRealtimeSession({ sessionId, onEvent }: UseRealtimeSessionOptions) {
+export function useRealtimeSession({ sessionId, onEvent, onStatusChange }: UseRealtimeSessionOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const onEventRef = useRef(onEvent);
+  const onStatusChangeRef = useRef(onStatusChange);
   onEventRef.current = onEvent;
+  onStatusChangeRef.current = onStatusChange;
 
   useEffect(() => {
     if (!sessionId) return;
@@ -49,7 +52,6 @@ export function useRealtimeSession({ sessionId, onEvent }: UseRealtimeSessionOpt
     });
 
     // Postgres Changes: narrative_history — new GM/player messages saved to DB
-    // Triggers for players who reconnect mid-session or join late
     channel.on(
       "postgres_changes",
       {
@@ -59,7 +61,6 @@ export function useRealtimeSession({ sessionId, onEvent }: UseRealtimeSessionOpt
         filter: `session_id=eq.${sessionId}`,
       },
       () => {
-        // Signal that history changed so the UI can refetch
         onEventRef.current({ type: "world_state_update" });
       },
     );
@@ -131,7 +132,9 @@ export function useRealtimeSession({ sessionId, onEvent }: UseRealtimeSessionOpt
       },
     );
 
-    channel.subscribe();
+    channel.subscribe((status) => {
+      onStatusChangeRef.current?.(status === "SUBSCRIBED");
+    });
     channelRef.current = channel;
 
     return () => {

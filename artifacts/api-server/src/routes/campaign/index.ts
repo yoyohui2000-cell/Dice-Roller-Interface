@@ -19,6 +19,7 @@ import {
   GetSessionHistoryParams,
 } from "@workspace/api-zod";
 import { logger } from "../../lib/logger";
+import { broadcastGameEvent } from "../../lib/supabase-broadcast";
 import {
   GM_SYSTEM_PROMPT,
   WORLD_STATE_EVALUATOR_PROMPT,
@@ -247,6 +248,7 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
       if (text) {
         fullResponse += text;
         res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+        void broadcastGameEvent(params.data.id, { type: "gm_chunk", chunk: text });
       }
     }
 
@@ -361,6 +363,14 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
 
     res.write(`data: ${JSON.stringify({ done: true, turnState, combatState: combatState !== undefined ? combatState : undefined, playerUpdates: appliedUpdates.length > 0 ? appliedUpdates : undefined, gmPlayerChanges: playerUpdates.length > 0 ? playerUpdates : undefined })}\n\n`);
     res.end();
+
+    void broadcastGameEvent(params.data.id, {
+      type: "gm_done",
+      turnState: turnState ?? { who: "全體", dice: null, purpose: null },
+      combatState: combatState !== undefined ? combatState : undefined,
+      playerUpdates: appliedUpdates.length > 0 ? appliedUpdates : undefined,
+      gmPlayerChanges: playerUpdates.length > 0 ? playerUpdates : undefined,
+    });
 
     // Background: world state evaluation + NPC extraction — never blocks players
     (async () => {

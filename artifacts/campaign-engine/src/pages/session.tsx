@@ -181,6 +181,7 @@ export default function Session() {
   const [gmStatNotifications, setGmStatNotifications] = useState<GmStatNotification[]>([]);
   const [gmChangesByPlayer, setGmChangesByPlayer] = useState<Record<number, GmChange>>({});
   const streamStartPosRef = useRef<number>(0);
+  const isLocalStreamingRef = useRef(false);
   const playersRef = useRef(players);
   const turnStateRef = useRef(turnState);
   useEffect(() => { playersRef.current = players; }, [players]);
@@ -344,10 +345,24 @@ export default function Session() {
   });
 
   useEffect(() => {
-    if (players && players.length > 0 && !selectedPlayerId) {
-      setSelectedPlayerId(players[0].id);
+    if (!players || players.length === 0) return;
+    if (selectedPlayerId) return;
+    const stored = localStorage.getItem(`session:${sessionId}:myPlayerId`);
+    if (stored) {
+      const id = parseInt(stored, 10);
+      if (players.some(p => p.id === id)) {
+        setSelectedPlayerId(id);
+        return;
+      }
     }
-  }, [players, selectedPlayerId]);
+    setSelectedPlayerId(players[0].id);
+  }, [players, selectedPlayerId, sessionId]);
+
+  useEffect(() => {
+    if (selectedPlayerId) {
+      localStorage.setItem(`session:${sessionId}:myPlayerId`, String(selectedPlayerId));
+    }
+  }, [selectedPlayerId, sessionId]);
 
   useEffect(() => {
     if (isJoinLink && !sessionLoading) {
@@ -459,11 +474,13 @@ export default function Session() {
         break;
       }
       case "gm_chunk": {
+        if (isLocalStreamingRef.current) break;
         narrativeRef.current += event.chunk;
         setNarrative(narrativeRef.current);
         break;
       }
       case "gm_done": {
+        if (isLocalStreamingRef.current) break;
         const rawGmText = narrativeRef.current.slice(streamStartPosRef.current);
         narrativeRef.current = narrativeRef.current
           .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
@@ -536,18 +553,8 @@ export default function Session() {
   const { broadcast } = useRealtimeSession({
     sessionId,
     onEvent: handleRealtimeEvent,
+    onStatusChange: setIsConnected,
   });
-
-  useEffect(() => {
-    if (!sessionId) return;
-    import("@/lib/supabase").then(({ supabase }) => {
-      const channel = supabase.channel(`session:${sessionId}`);
-      channel.subscribe((status) => {
-        setIsConnected(status === "SUBSCRIBED");
-      });
-      return () => { supabase.removeChannel(channel); };
-    });
-  }, [sessionId]);
 
   const handleSend = async () => {
     const isDiceMode = turnState.dice !== null && activeRollId !== null;
@@ -597,6 +604,7 @@ export default function Session() {
     setActiveRollId(null);
     setTurnState({ who: "全體", dice: null, purpose: null });
 
+    isLocalStreamingRef.current = true;
     try {
       const BASE = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
       const res = await fetch(`${BASE}/api/campaign/sessions/${sessionId}/gm-message`, {
@@ -625,7 +633,6 @@ export default function Session() {
             if (data.content) {
               narrativeRef.current += data.content;
               setNarrative(narrativeRef.current);
-              broadcast({ type: "gm_chunk", chunk: data.content });
             }
             if (data.done) {
               narrativeRef.current = narrativeRef.current
@@ -702,14 +709,9 @@ export default function Session() {
                   setTimeout(() => setGmStatNotifications(prev => prev.filter(n => n.ts !== ts)), 6000);
                 }
 
-                for (const upd of updates) {
-                  broadcast({ type: "player_hp_update", playerId: upd.id, characterName: upd.characterName, hp: upd.hp, maxHp: upd.maxHp });
-                }
               }
 
-              broadcast({ type: "gm_done", turnState: newTurnState, combatState: data.combatState as CombatState | undefined });
-              broadcast({ type: "turn_change", ...newTurnState });
-
+              isLocalStreamingRef.current = false;
               refetchHistory();
               refetchPlayers();
               refetchDiceRolls();
@@ -740,6 +742,7 @@ export default function Session() {
       // Flush any remaining complete event in the buffer
       if (sseBuffer.trim()) processEvent(sseBuffer);
     } catch (err) {
+      isLocalStreamingRef.current = false;
       setIsStreaming(false);
       setTurnState({ who: "全體", dice: null, purpose: null });
       console.error(err);
@@ -807,6 +810,8 @@ export default function Session() {
     }, {
       onSuccess: (player) => {
         setPlayerModalOpen(false);
+        setSelectedPlayerId(player.id);
+        localStorage.setItem(`session:${sessionId}:myPlayerId`, String(player.id));
         refetchPlayers();
         broadcast({
           type: "player_joined",
