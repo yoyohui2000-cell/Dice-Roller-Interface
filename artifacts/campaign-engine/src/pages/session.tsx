@@ -11,12 +11,13 @@ import {
   getGetSessionHistoryQueryKey,
   useGetSessionDiceRolls,
   getGetSessionDiceRollsQueryKey,
+  useUpdatePlayer,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Send, Dices, UserPlus, Wifi, WifiOff, Clock, Users, BookOpen, Swords, Shield, Skull, X, Link2, Check } from "lucide-react";
+import { ArrowLeft, Send, Dices, UserPlus, Wifi, WifiOff, Clock, Users, BookOpen, Swords, Shield, Skull, X, Link2, Check, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
@@ -80,8 +81,21 @@ export default function Session() {
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [editingHpId, setEditingHpId] = useState<number | null>(null);
+  const [editHpValue, setEditHpValue] = useState<number>(0);
+  const updatePlayer = useUpdatePlayer();
 
   const isJoinLink = new URLSearchParams(window.location.search).has("join");
+
+  const handleSaveHp = (playerId: number, maxHp: number) => {
+    const clamped = Math.max(0, Math.min(editHpValue, maxHp));
+    updatePlayer.mutate({ playerId, data: { hp: clamped } }, {
+      onSuccess: () => {
+        refetchPlayers();
+        setEditingHpId(null);
+      }
+    });
+  };
 
   const handleShareLink = async () => {
     const url = `${window.location.origin}${window.location.pathname}?join=1`;
@@ -605,9 +619,51 @@ export default function Session() {
                         </div>
                         <div className="text-xs text-muted-foreground mb-2">{p.race} {p.class} · Lv {p.level}</div>
                         <div>
-                          <div className="flex justify-between text-xs mb-1 font-mono">
+                          <div className="flex justify-between text-xs mb-1 font-mono items-center">
                             <span className="text-muted-foreground">HP</span>
-                            <span className={p.hp <= p.maxHp * 0.2 ? 'text-destructive' : 'text-primary'}>{p.hp} / {p.maxHp}</span>
+                            {editingHpId === p.id ? (
+                              <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                <button
+                                  onClick={() => setEditHpValue(v => Math.max(0, v - 1))}
+                                  className="w-5 h-5 flex items-center justify-center rounded bg-destructive/20 text-destructive hover:bg-destructive/40 font-bold leading-none"
+                                >−</button>
+                                <input
+                                  type="number"
+                                  className="w-10 bg-background border border-primary/50 rounded px-1 text-center text-primary text-xs font-mono"
+                                  value={editHpValue}
+                                  onChange={e => setEditHpValue(Math.max(0, parseInt(e.target.value) || 0))}
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter") handleSaveHp(p.id, p.maxHp);
+                                    if (e.key === "Escape") setEditingHpId(null);
+                                  }}
+                                  autoFocus
+                                  min={0}
+                                  max={p.maxHp}
+                                />
+                                <button
+                                  onClick={() => setEditHpValue(v => Math.min(p.maxHp, v + 1))}
+                                  className="w-5 h-5 flex items-center justify-center rounded bg-green-900/40 text-green-400 hover:bg-green-900/70 font-bold leading-none"
+                                >+</button>
+                                <span className="text-muted-foreground">/ {p.maxHp}</span>
+                                <button onClick={() => handleSaveHp(p.id, p.maxHp)} className="text-green-400 hover:text-green-300 ml-1">
+                                  <Check className="w-3 h-3" />
+                                </button>
+                                <button onClick={() => setEditingHpId(null)} className="text-muted-foreground hover:text-foreground">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 group/hp">
+                                <span className={p.hp <= p.maxHp * 0.2 ? "text-destructive" : "text-primary"}>{p.hp} / {p.maxHp}</span>
+                                <button
+                                  onClick={e => { e.stopPropagation(); setEditingHpId(p.id); setEditHpValue(p.hp); }}
+                                  className="opacity-0 group-hover/hp:opacity-100 focus:opacity-100 text-muted-foreground/50 hover:text-primary/70 transition-opacity"
+                                  title="GM：編輯 HP"
+                                >
+                                  <Pencil className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                           <div className="h-1.5 bg-background rounded-full overflow-hidden border border-border">
                             <div
