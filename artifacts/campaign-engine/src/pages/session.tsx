@@ -20,12 +20,13 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Send, Dices, UserPlus, Wifi, WifiOff, Clock, Users, BookOpen, Swords, Shield, Skull, X, Link2, Check, Pencil, Plus, ChevronRight, RotateCcw, Trash2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRealtimeSession, type RealtimeEvent, type TurnState, type CombatState } from "@/hooks/use-realtime-session";
 import { usePresence } from "@/hooks/use-presence";
-import CharacterSheet, { type CharacterSheetSaveData, type GmChange, DEFAULT_STATS } from "@/components/character-sheet";
+import CharacterSheet, { type CharacterSheetSaveData, type GmChange } from "@/components/character-sheet";
+import CharacterCreationDialog, { type CharacterCreationData } from "@/components/character-creation-dialog";
 
 type NpcData = {
   id: number; sessionId: number; name: string; location: string;
@@ -777,21 +778,16 @@ export default function Session() {
     }, 800);
   };
 
-  const [newPlayer, setNewPlayer] = useState({
-    name: "", characterName: "", race: "", class: "", background: "", hp: 10, maxHp: 10, ac: 10, level: 1,
-    str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10,
-  });
   const [playerModalOpen, setPlayerModalOpen] = useState(false);
 
-  const handleCreatePlayer = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreatePlayer = (data: CharacterCreationData) => {
     addPlayer.mutate({
       id: sessionId,
       data: {
-        name: newPlayer.name, characterName: newPlayer.characterName,
-        race: newPlayer.race, class: newPlayer.class, background: newPlayer.background,
-        hp: newPlayer.hp, maxHp: newPlayer.maxHp, ac: newPlayer.ac, level: newPlayer.level,
-        stats: JSON.stringify({ ...DEFAULT_STATS, str: newPlayer.str, dex: newPlayer.dex, con: newPlayer.con, int: newPlayer.int, wis: newPlayer.wis, cha: newPlayer.cha })
+        name: data.name, characterName: data.characterName,
+        race: data.race, class: data.class, background: data.background,
+        hp: data.hp, maxHp: data.maxHp, ac: data.ac, level: data.level,
+        stats: data.stats,
       }
     }, {
       onSuccess: (player) => {
@@ -910,36 +906,18 @@ export default function Session() {
           </div>
           <div className="flex justify-between items-center mb-4 border-b border-border pb-2">
             <h2 className="font-serif text-xl text-primary">冒險者隊伍</h2>
-            <Dialog open={playerModalOpen} onOpenChange={setPlayerModalOpen}>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/20"><UserPlus className="w-5 h-5" /></Button>
-              </DialogTrigger>
-              <DialogContent className="bg-card border-border">
-                <DialogHeader>
-                  <DialogTitle className="font-serif text-2xl text-primary">
-                    {isJoinLink ? "加入冒險！" : "創造新角色"}
-                  </DialogTitle>
-                  {isJoinLink && (
-                    <DialogDescription className="font-serif text-base text-muted-foreground pt-1">
-                      你的朋友邀請你加入《{session?.name}》。先創造你的角色，然後就能開始冒險了！
-                    </DialogDescription>
-                  )}
-                </DialogHeader>
-                <form onSubmit={handleCreatePlayer} className="space-y-3 pt-2">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><Label>玩家暱稱</Label><Input value={newPlayer.name} onChange={e => setNewPlayer({ ...newPlayer, name: e.target.value })} required /></div>
-                    <div><Label>角色名稱</Label><Input value={newPlayer.characterName} onChange={e => setNewPlayer({ ...newPlayer, characterName: e.target.value })} required /></div>
-                    <div><Label>種族</Label><Input value={newPlayer.race} onChange={e => setNewPlayer({ ...newPlayer, race: e.target.value })} required /></div>
-                    <div><Label>職業</Label><Input value={newPlayer.class} onChange={e => setNewPlayer({ ...newPlayer, class: e.target.value })} required /></div>
-                    <div><Label>最大 HP</Label><Input type="number" value={newPlayer.maxHp} onChange={e => setNewPlayer({ ...newPlayer, maxHp: +e.target.value, hp: +e.target.value })} required /></div>
-                    <div><Label>AC (護甲)</Label><Input type="number" value={newPlayer.ac} onChange={e => setNewPlayer({ ...newPlayer, ac: +e.target.value })} required /></div>
-                  </div>
-                  <div><Label>背景故事</Label><Input value={newPlayer.background} onChange={e => setNewPlayer({ ...newPlayer, background: e.target.value })} /></div>
-                  <Button type="submit" className="w-full" disabled={addPlayer.isPending}>加入隊伍</Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+            <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/20" onClick={() => setPlayerModalOpen(true)}>
+              <UserPlus className="w-5 h-5" />
+            </Button>
           </div>
+          <CharacterCreationDialog
+            open={playerModalOpen}
+            onOpenChange={setPlayerModalOpen}
+            onSubmit={handleCreatePlayer}
+            isPending={addPlayer.isPending}
+            isJoinLink={isJoinLink}
+            sessionName={session?.name}
+          />
 
           <AnimatePresence>
             {gmStatNotifications.length > 0 && (
