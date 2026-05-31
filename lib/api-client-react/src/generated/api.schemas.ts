@@ -123,6 +123,7 @@ export interface PlayerUpdate {
   hp?: number;
   maxHp?: number;
   ac?: number;
+  level?: number;
   stats?: string;
 }
 

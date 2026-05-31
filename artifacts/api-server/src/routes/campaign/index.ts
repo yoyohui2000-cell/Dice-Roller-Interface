@@ -341,7 +341,7 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
       }
     }
 
-    res.write(`data: ${JSON.stringify({ done: true, turnState, combatState: combatState !== undefined ? combatState : undefined, playerUpdates: appliedUpdates.length > 0 ? appliedUpdates : undefined })}\n\n`);
+    res.write(`data: ${JSON.stringify({ done: true, turnState, combatState: combatState !== undefined ? combatState : undefined, playerUpdates: appliedUpdates.length > 0 ? appliedUpdates : undefined, gmPlayerChanges: playerUpdates.length > 0 ? playerUpdates : undefined })}\n\n`);
     res.end();
 
     // Background: world state evaluation + NPC extraction — never blocks players

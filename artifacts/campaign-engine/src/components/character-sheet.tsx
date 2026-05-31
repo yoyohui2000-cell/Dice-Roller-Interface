@@ -9,6 +9,16 @@ import { motion, AnimatePresence } from "framer-motion";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+export type GmChange = {
+  hpDelta: number | null;
+  conditionsAdded: string[];
+  conditionsRemoved: string[];
+  itemsGained: string[];
+  itemsLost: string[];
+  slotsUsed: Array<{ level: number; count: number }>;
+  ts: number;
+};
+
 type AbilityKey = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
 type EquipSlot = "mainHand" | "offHand" | "head" | "chest" | "hands" | "feet" | "ring1" | "ring2" | "neck";
@@ -196,9 +206,10 @@ interface CharacterSheetProps {
   player: CharacterSheetPlayer;
   onSave: (data: CharacterSheetSaveData) => void;
   isSaving?: boolean;
+  gmChange?: GmChange;
 }
 
-export default function CharacterSheet({ player, onSave, isSaving }: CharacterSheetProps) {
+export default function CharacterSheet({ player, onSave, isSaving, gmChange }: CharacterSheetProps) {
   const [tab, setTab] = useState<Tab>("char");
   const [stats, setStats] = useState<CharacterStats>(() => parseStats(player.stats));
   const [hp, setHp] = useState(player.hp);
@@ -206,6 +217,12 @@ export default function CharacterSheet({ player, onSave, isSaving }: CharacterSh
   const [ac, setAc] = useState(player.ac);
   const [level, setLevel] = useState(player.level);
   const [savedFlash, setSavedFlash] = useState(false);
+
+  // GM-driven visual feedback state
+  const [hpFlash, setHpFlash] = useState<{ delta: number; id: number } | null>(null);
+  const [highlightedConditions, setHighlightedConditions] = useState<Set<string>>(new Set());
+  const [highlightedInventory, setHighlightedInventory] = useState<Set<string>>(new Set());
+  const prevGmChangeTs = useRef<number | undefined>(undefined);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestOnSave = useRef(onSave);
@@ -216,6 +233,39 @@ export default function CharacterSheet({ player, onSave, isSaving }: CharacterSh
   useEffect(() => { setMaxHp(player.maxHp); }, [player.maxHp]);
   useEffect(() => { setAc(player.ac); }, [player.ac]);
   useEffect(() => { setLevel(player.level); }, [player.level]);
+
+  // Trigger visual feedback whenever a new GM change arrives
+  useEffect(() => {
+    if (!gmChange || gmChange.ts === prevGmChangeTs.current) return;
+    prevGmChangeTs.current = gmChange.ts;
+
+    if (gmChange.hpDelta !== null && gmChange.hpDelta !== 0) {
+      setHpFlash({ delta: gmChange.hpDelta, id: gmChange.ts });
+      const t = setTimeout(() => setHpFlash(null), 2500);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [gmChange]);
+
+  useEffect(() => {
+    if (!gmChange || gmChange.ts === 0) return;
+    if (gmChange.conditionsAdded.length > 0) {
+      setHighlightedConditions(new Set(gmChange.conditionsAdded));
+      const t = setTimeout(() => setHighlightedConditions(new Set()), 3000);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [gmChange?.conditionsAdded, gmChange?.ts]);
+
+  useEffect(() => {
+    if (!gmChange || gmChange.ts === 0) return;
+    if (gmChange.itemsGained.length > 0) {
+      setHighlightedInventory(new Set(gmChange.itemsGained));
+      const t = setTimeout(() => setHighlightedInventory(new Set()), 3000);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [gmChange?.itemsGained, gmChange?.ts]);
 
   const scheduleSave = useCallback((coreFields: { hp: number; maxHp: number; ac: number; level: number }, s: CharacterStats) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -248,6 +298,7 @@ export default function CharacterSheet({ player, onSave, isSaving }: CharacterSh
 
   const hpPct = maxHp > 0 ? hp / maxHp : 0;
   const hpColor = hpPct > 0.5 ? "bg-green-600" : hpPct > 0.2 ? "bg-yellow-500" : "bg-destructive";
+  const hpBarGlow = hpFlash ? (hpFlash.delta < 0 ? "shadow-[0_0_12px_rgba(239,68,68,0.7)]" : "shadow-[0_0_12px_rgba(34,197,94,0.7)]") : "";
   const prof = stats.proficiencyBonus;
 
   // ── Character Tab ──────────────────────────────────────────────────────────
@@ -282,10 +333,27 @@ export default function CharacterSheet({ player, onSave, isSaving }: CharacterSh
         <div>
           <SectionTitle>生命值</SectionTitle>
           <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 relative">
               <InlineNumEdit value={hp} max={maxHp} onChange={updHp} className={cn("text-base font-bold", hp <= maxHp * 0.2 ? "text-destructive" : "text-primary")} />
               <span className="text-muted-foreground text-xs">/</span>
               <InlineNumEdit value={maxHp} onChange={updMaxHp} className="text-xs text-muted-foreground" />
+              <AnimatePresence>
+                {hpFlash && (
+                  <motion.span
+                    key={hpFlash.id}
+                    initial={{ opacity: 1, y: 0, scale: 1.2 }}
+                    animate={{ opacity: 0, y: hpFlash.delta < 0 ? 16 : -16, scale: 0.9 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 1.8, ease: "easeOut" }}
+                    className={cn(
+                      "absolute left-0 -top-5 font-bold font-mono text-sm pointer-events-none select-none z-20 drop-shadow-lg",
+                      hpFlash.delta < 0 ? "text-red-400" : "text-green-400"
+                    )}
+                  >
+                    {hpFlash.delta > 0 ? "+" : ""}{hpFlash.delta} HP
+                  </motion.span>
+                )}
+              </AnimatePresence>
             </div>
             {stats.tempHp > 0 && (
               <span className="text-[10px] font-mono text-blue-400 bg-blue-950/40 border border-blue-700/30 rounded px-1.5 py-0.5">
@@ -293,8 +361,13 @@ export default function CharacterSheet({ player, onSave, isSaving }: CharacterSh
               </span>
             )}
           </div>
-          <div className="h-2 bg-background rounded-full border border-border overflow-hidden">
-            <div className={cn("h-full transition-all duration-500 rounded-full", hpColor)} style={{ width: `${hpPct * 100}%` }} />
+          <div className={cn("h-2 bg-background rounded-full border border-border overflow-hidden transition-shadow duration-500", hpBarGlow)}>
+            <motion.div
+              className={cn("h-full rounded-full", hpColor)}
+              style={{ width: `${hpPct * 100}%` }}
+              layout
+              transition={{ duration: 0.5 }}
+            />
           </div>
           <div className="flex items-center gap-2 mt-1.5">
             <span className="text-[9px] text-muted-foreground">臨時HP</span>
@@ -352,12 +425,27 @@ export default function CharacterSheet({ player, onSave, isSaving }: CharacterSh
           <div className="flex flex-wrap gap-1.5">
             {stats.conditions.length === 0 ? (
               <span className="text-[10px] text-muted-foreground italic">無狀態效果</span>
-            ) : stats.conditions.map(c => (
-              <span key={c} className="flex items-center gap-1 text-[10px] bg-amber-950/40 border border-amber-700/40 text-amber-300 rounded px-1.5 py-0.5 font-serif">
-                {c}
-                <button onClick={() => removeCondition(c)} className="text-amber-500 hover:text-amber-200"><X className="w-2.5 h-2.5" /></button>
-              </span>
-            ))}
+            ) : stats.conditions.map(c => {
+              const isNew = highlightedConditions.has(c);
+              return (
+                <motion.span
+                  key={c}
+                  initial={isNew ? { scale: 1.15, boxShadow: "0 0 10px rgba(251,191,36,0.8)" } : false}
+                  animate={{ scale: 1, boxShadow: "0 0 0px rgba(0,0,0,0)" }}
+                  transition={{ duration: 1.2 }}
+                  className={cn(
+                    "flex items-center gap-1 text-[10px] rounded px-1.5 py-0.5 font-serif border",
+                    isNew
+                      ? "bg-amber-700/60 border-amber-500/80 text-amber-100 shadow-[0_0_8px_rgba(251,191,36,0.6)]"
+                      : "bg-amber-950/40 border-amber-700/40 text-amber-300"
+                  )}
+                >
+                  {isNew && <span className="text-amber-200 text-[8px] font-mono">NEW</span>}
+                  {c}
+                  <button onClick={() => removeCondition(c)} className="text-amber-500 hover:text-amber-200"><X className="w-2.5 h-2.5" /></button>
+                </motion.span>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -657,13 +745,28 @@ export default function CharacterSheet({ player, onSave, isSaving }: CharacterSh
             <SectionTitle>背包</SectionTitle>
           </div>
           <div className="space-y-1 mb-1.5">
-            {stats.inventory.map(item => (
-              <div key={item.id} className="flex items-center gap-1.5">
-                <InlineNumEdit value={item.qty} min={0} max={999} onChange={v => updateInvQty(item.id, v)} className="text-[10px] text-muted-foreground w-8 text-center" />
-                <span className="text-[11px] font-serif text-foreground flex-1 truncate">{item.name}</span>
-                <button onClick={() => removeInv(item.id)} className="text-muted-foreground/30 hover:text-destructive/60"><X className="w-3 h-3" /></button>
-              </div>
-            ))}
+            <AnimatePresence initial={false}>
+              {stats.inventory.map(item => {
+                const isNew = highlightedInventory.has(item.name);
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={isNew ? { opacity: 0, x: -8, backgroundColor: "rgba(59,130,246,0.25)" } : { opacity: 1, x: 0 }}
+                    animate={{ opacity: 1, x: 0, backgroundColor: "rgba(0,0,0,0)" }}
+                    transition={{ duration: 1.5 }}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded px-0.5",
+                      isNew && "ring-1 ring-blue-500/50"
+                    )}
+                  >
+                    <InlineNumEdit value={item.qty} min={0} max={999} onChange={v => updateInvQty(item.id, v)} className="text-[10px] text-muted-foreground w-8 text-center" />
+                    <span className={cn("text-[11px] font-serif flex-1 truncate", isNew ? "text-blue-300" : "text-foreground")}>{item.name}</span>
+                    {isNew && <span className="text-[8px] font-mono text-blue-400">NEW</span>}
+                    <button onClick={() => removeInv(item.id)} className="text-muted-foreground/30 hover:text-destructive/60"><X className="w-3 h-3" /></button>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
             {stats.inventory.length === 0 && <div className="text-[10px] text-muted-foreground italic">背包是空的</div>}
           </div>
           <div className="flex gap-1">

@@ -25,7 +25,7 @@ import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRealtimeSession, type RealtimeEvent, type TurnState, type CombatState } from "@/hooks/use-realtime-session";
 import { usePresence } from "@/hooks/use-presence";
-import CharacterSheet, { type CharacterSheetSaveData, DEFAULT_STATS } from "@/components/character-sheet";
+import CharacterSheet, { type CharacterSheetSaveData, type GmChange, DEFAULT_STATS } from "@/components/character-sheet";
 
 type NpcData = {
   id: number; sessionId: number; name: string; location: string;
@@ -39,6 +39,23 @@ type HpProposal = {
   characterName: string;
   delta: number;
   label: string;
+};
+
+type GmStatNotification = {
+  id: string;
+  characterName: string;
+  lines: Array<{ text: string; color: "red" | "green" | "amber" | "blue" | "purple" }>;
+  ts: number;
+};
+
+type RawPlayerUpdate = {
+  name: string;
+  hpChange: number;
+  conditionsAdd: string[];
+  conditionsRemove: string[];
+  inventoryAdd: Array<{ name: string; qty: number }>;
+  inventoryRemove: string[];
+  spellSlotsUse: Array<{ level: number; count: number }>;
 };
 
 type PlayerLike = { id: number; characterName: string; hp: number; maxHp: number };
@@ -160,6 +177,8 @@ export default function Session() {
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [hpProposals, setHpProposals] = useState<HpProposal[]>([]);
+  const [gmStatNotifications, setGmStatNotifications] = useState<GmStatNotification[]>([]);
+  const [gmChangesByPlayer, setGmChangesByPlayer] = useState<Record<number, GmChange>>({});
   const streamStartPosRef = useRef<number>(0);
   const playersRef = useRef(players);
   const turnStateRef = useRef(turnState);
@@ -619,14 +638,62 @@ export default function Session() {
               // Apply GM-driven player stat updates immediately to the cache
               if (Array.isArray(data.playerUpdates) && data.playerUpdates.length > 0) {
                 const updates = data.playerUpdates as Array<{ id: number; characterName: string; hp: number; maxHp: number; ac: number; level: number; stats: string }>;
+                const rawChanges = (data.gmPlayerChanges ?? []) as RawPlayerUpdate[];
                 const playersKey = getListSessionPlayersQueryKey(sessionId);
+
+                // Snapshot current HP values for delta computation
+                const currentPlayers = playersRef.current ?? [];
+
                 queryClient.setQueryData(playersKey, (old: typeof players) =>
                   old?.map(p => {
                     const upd = updates.find(u => u.id === p.id);
                     return upd ? { ...p, hp: upd.hp, maxHp: upd.maxHp, ac: upd.ac, level: upd.level, stats: upd.stats } : p;
                   }) ?? []
                 );
-                broadcast({ type: "player_hp_update" });
+
+                // Build visual change feedback
+                const ts = Date.now();
+                const newChanges: Record<number, GmChange> = {};
+                const notifications: GmStatNotification[] = [];
+
+                for (const upd of updates) {
+                  const prev = currentPlayers.find(p => p.id === upd.id);
+                  const hpDelta = prev ? upd.hp - prev.hp : null;
+                  const raw = rawChanges.find(r => r.name === upd.characterName);
+
+                  const conditionsAdded = raw?.conditionsAdd ?? [];
+                  const conditionsRemoved = raw?.conditionsRemove ?? [];
+                  const itemsGained = (raw?.inventoryAdd ?? []).map(i => i.name);
+                  const itemsLost = raw?.inventoryRemove ?? [];
+                  const slotsUsed = raw?.spellSlotsUse ?? [];
+
+                  newChanges[upd.id] = { hpDelta: hpDelta !== 0 ? hpDelta : null, conditionsAdded, conditionsRemoved, itemsGained, itemsLost, slotsUsed, ts };
+
+                  // Build notification lines
+                  const lines: GmStatNotification["lines"] = [];
+                  if (hpDelta !== null && hpDelta !== 0) {
+                    lines.push({ text: `${hpDelta > 0 ? "+" : ""}${hpDelta} HP (${prev?.hp ?? "?"} → ${upd.hp})`, color: hpDelta < 0 ? "red" : "green" });
+                  }
+                  for (const c of conditionsAdded) lines.push({ text: `＋${c}`, color: "amber" });
+                  for (const c of conditionsRemoved) lines.push({ text: `${c} 解除`, color: "green" });
+                  for (const i of itemsGained) lines.push({ text: `＋${i}`, color: "blue" });
+                  for (const i of itemsLost) lines.push({ text: `－${i}`, color: "red" });
+                  for (const s of slotsUsed) lines.push({ text: `法術位 Lv${s.level} ×${s.count}`, color: "purple" });
+
+                  if (lines.length > 0) {
+                    notifications.push({ id: `${upd.id}-${ts}`, characterName: upd.characterName, lines, ts });
+                  }
+                }
+
+                setGmChangesByPlayer(newChanges);
+                if (notifications.length > 0) {
+                  setGmStatNotifications(prev => [...prev, ...notifications]);
+                  setTimeout(() => setGmStatNotifications(prev => prev.filter(n => n.ts !== ts)), 6000);
+                }
+
+                for (const upd of updates) {
+                  broadcast({ type: "player_hp_update", playerId: upd.id, characterName: upd.characterName, hp: upd.hp, maxHp: upd.maxHp });
+                }
               }
 
               broadcast({ type: "gm_done", turnState: newTurnState, combatState: data.combatState as CombatState | undefined });
@@ -875,6 +942,53 @@ export default function Session() {
           </div>
 
           <AnimatePresence>
+            {gmStatNotifications.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-3 space-y-1.5 overflow-hidden"
+              >
+                {gmStatNotifications.map(notif => (
+                  <motion.div
+                    key={notif.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10, height: 0 }}
+                    className="rounded border border-primary/30 bg-primary/5 px-2.5 py-2"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-mono text-primary/80 tracking-wider uppercase">⚙ GM 更新了 {notif.characterName}</span>
+                      <button
+                        onClick={() => setGmStatNotifications(prev => prev.filter(n => n.id !== notif.id))}
+                        className="text-muted-foreground/40 hover:text-muted-foreground/80"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {notif.lines.map((line, i) => (
+                        <span
+                          key={i}
+                          className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                            line.color === "red" ? "bg-red-950/60 text-red-300 border border-red-700/40" :
+                            line.color === "green" ? "bg-green-950/60 text-green-300 border border-green-700/40" :
+                            line.color === "amber" ? "bg-amber-950/60 text-amber-300 border border-amber-700/40" :
+                            line.color === "blue" ? "bg-blue-950/60 text-blue-300 border border-blue-700/40" :
+                            "bg-purple-950/60 text-purple-300 border border-purple-700/40"
+                          }`}
+                        >
+                          {line.text}
+                        </span>
+                      ))}
+                    </div>
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
             {hpProposals.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
@@ -967,6 +1081,7 @@ export default function Session() {
                 player={selectedPlayer}
                 onSave={handleSaveCharacter}
                 isSaving={updatePlayer.isPending}
+                gmChange={gmChangesByPlayer[selectedPlayer.id]}
               />
             ) : null}
           </div>
