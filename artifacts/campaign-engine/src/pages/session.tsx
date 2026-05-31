@@ -504,7 +504,7 @@ export default function Session() {
     const isDiceMode = turnState.dice !== null && activeRollId !== null;
     if (isStreaming || !selectedPlayerId) return;
     if (!isDiceMode && !action.trim()) return;
-    if (!isMyTurn) return;
+    if (!isDiceMode && !isMyTurn) return;
 
     const currentPlayer = players?.find(p => p.id === selectedPlayerId);
     const pName = currentPlayer?.characterName || "玩家";
@@ -628,7 +628,7 @@ export default function Session() {
   handleSendRef.current = handleSend;
 
   const executeRoll = (diceType: string, max: number) => {
-    if (!selectedPlayerId || !isMyTurn) return;
+    if (!selectedPlayerId) return;
     if (turnState.dice !== null && turnState.dice !== diceType) return;
 
     const currentPlayer = players?.find(p => p.id === selectedPlayerId);
@@ -950,7 +950,7 @@ export default function Session() {
           <div className="border-t border-border bg-card relative z-10 shadow-[0_-4px_20px_rgba(0,0,0,0.5)]">
 
             <AnimatePresence>
-              {!isMyTurn && !isStreaming && (
+              {!isMyTurn && !isStreaming && turnState.dice === null && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
