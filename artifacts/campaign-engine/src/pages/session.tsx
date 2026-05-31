@@ -333,6 +333,9 @@ export default function Session() {
 
   const selectedPlayer = players?.find(p => p.id === selectedPlayerId);
   const isMyTurn = turnState.who === "全體" || selectedPlayer?.characterName === turnState.who;
+  // NPC turn = turnState.who is not "全體" and not any player's character name
+  const playerCharNames = new Set((players ?? []).map(p => p.characterName));
+  const isNpcTurn = !isMyTurn && turnState.who !== "全體" && !playerCharNames.has(turnState.who);
 
   const { onlineUsers } = usePresence({
     sessionId,
@@ -551,15 +554,18 @@ export default function Session() {
     // Auto-use first player if none selected yet (handles dice auto-submit race)
     const effectivePlayerId = selectedPlayerId ?? players?.[0]?.id ?? null;
     if (isStreaming || !effectivePlayerId) return;
-    if (!isDiceMode && !action.trim()) return;
-    if (!isDiceMode && !isMyTurn) return;
+    // During NPC turns, allow sending even with no action (blank = "continue" signal)
+    if (!isDiceMode && !action.trim() && !isNpcTurn) return;
+    // Block player action only when it's another PLAYER's turn (not NPC)
+    if (!isDiceMode && !isMyTurn && !isNpcTurn) return;
 
     // Reset the auto-submit guard immediately so it can never double-fire
     pendingDiceAutoSubmit.current = false;
 
     const currentPlayer = players?.find(p => p.id === effectivePlayerId);
     const pName = currentPlayer?.characterName || "玩家";
-    const currentAction = action.trim() || "(骰子結果)";
+    // NPC turn with no typed action → send a "continue" signal to the GM
+    const currentAction = action.trim() || (isNpcTurn ? `(GM請繼續，輪到${turnState.who}行動)` : "(骰子結果)");
 
     setAction("");
 
@@ -568,7 +574,9 @@ export default function Session() {
       rollText = ` (擲 ${rollingDice}: ${rollResult}${rollPurpose ? ` - ${rollPurpose}` : ""})`;
     }
 
-    const line = `[${pName}] ${currentAction}${rollText}\n\n[GM] `;
+    // NPC-turn "continue" signal is an invisible system prompt — don't add it to the visible narrative
+    const isNpcContinue = isNpcTurn && !action.trim() && !rollText;
+    const line = isNpcContinue ? `\n[GM] ` : `[${pName}] ${currentAction}${rollText}\n\n[GM] `;
     narrativeRef.current += line;
     setNarrative(narrativeRef.current);
     setIsStreaming(true);
@@ -1086,7 +1094,7 @@ export default function Session() {
           <div className="border-t border-border bg-card relative z-10 shadow-[0_-4px_20px_rgba(0,0,0,0.5)]">
 
             <AnimatePresence>
-              {!isMyTurn && !isStreaming && turnState.dice === null && (
+              {!isMyTurn && !isNpcTurn && !isStreaming && turnState.dice === null && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
@@ -1177,6 +1185,38 @@ export default function Session() {
                           </motion.div>
                         )}
                       </AnimatePresence>
+                    </div>
+                  </motion.div>
+                ) : isNpcTurn && !isStreaming ? (
+                  /* ── NPC TURN — "continue" button so game never gets stuck ── */
+                  <motion.div
+                    key="npc-turn"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="space-y-2"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-serif text-muted-foreground bg-muted/30 rounded px-3 py-2 border border-border">
+                      <Swords className="w-4 h-4 shrink-0 text-red-400" />
+                      <span><strong className="text-foreground">{turnState.who}</strong> 正在行動...</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={action}
+                        onChange={e => setAction(e.target.value)}
+                        placeholder="（可選）輸入玩家反應，或直接點擊讓 GM 繼續"
+                        className="flex-1 bg-background border-border focus-visible:ring-primary text-sm sm:text-base py-4 sm:py-5"
+                        onKeyDown={e => e.key === 'Enter' && handleSend()}
+                        disabled={isStreaming}
+                      />
+                      <Button
+                        onClick={handleSend}
+                        disabled={isStreaming}
+                        className="h-auto px-4 sm:px-6 text-base font-serif bg-red-900/60 hover:bg-red-800/80 border border-red-700/40 text-red-200"
+                      >
+                        <ChevronRight className="w-5 h-5 sm:mr-1" />
+                        <span className="hidden sm:inline">繼續</span>
+                      </Button>
                     </div>
                   </motion.div>
                 ) : (
