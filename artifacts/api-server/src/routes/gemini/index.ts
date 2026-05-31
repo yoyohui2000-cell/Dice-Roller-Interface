@@ -97,6 +97,11 @@ router.post("/gemini/conversations/:id/messages", async (req, res): Promise<void
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  const keepAlive = setInterval(() => {
+    res.write(": ping\n\n");
+  }, 5000);
 
   let fullResponse = "";
   try {
@@ -113,17 +118,19 @@ router.post("/gemini/conversations/:id/messages", async (req, res): Promise<void
       const text = chunk.text;
       if (text) {
         fullResponse += text;
-        res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+        res.write(` ${JSON.stringify({ content: text })}\n\n`);
       }
     }
 
     await db.insert(messages).values({ conversationId: params.data.id, role: "assistant", content: fullResponse });
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.write(` ${JSON.stringify({ done: true })}\n\n`);
   } catch (err) {
     logger.error({ err }, "Gemini stream error");
-    res.write(`data: ${JSON.stringify({ error: "AI error" })}\n\n`);
+    res.write(` ${JSON.stringify({ error: "AI error" })}\n\n`);
+  } finally {
+    clearInterval(keepAlive);
+    res.end();
   }
-  res.end();
 });
 
 export default router;
