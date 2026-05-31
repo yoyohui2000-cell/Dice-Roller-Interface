@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Send, Dices, UserPlus, Wifi, WifiOff, Clock, Users, BookOpen, Swords, Shield, Skull, X, Link2, Check, Pencil } from "lucide-react";
+import { ArrowLeft, Send, Dices, UserPlus, Wifi, WifiOff, Clock, Users, BookOpen, Swords, Shield, Skull, X, Link2, Check, Pencil, Plus, ChevronRight, RotateCcw, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
@@ -38,6 +38,7 @@ type HpProposal = {
 };
 
 type PlayerLike = { id: number; characterName: string; hp: number; maxHp: number };
+type EnemyDraft = { id: string; name: string; initiative: number };
 
 function parseHpChanges(text: string, players: PlayerLike[], turnWho: string): HpProposal[] {
   const proposals: HpProposal[] = [];
@@ -164,7 +165,111 @@ export default function Session() {
   useEffect(() => { turnStateRef.current = turnState; }, [turnState]);
   const updatePlayer = useUpdatePlayer();
 
+  const [initiativeOpen, setInitiativeOpen] = useState(false);
+  const [playerInits, setPlayerInits] = useState<Record<number, number>>({});
+  const [enemyDrafts, setEnemyDrafts] = useState<EnemyDraft[]>([]);
+  const [isSubmittingInit, setIsSubmittingInit] = useState(false);
+  const [newEnemyName, setNewEnemyName] = useState("");
+  const [newEnemyInit, setNewEnemyInit] = useState(10);
+
   const isJoinLink = new URLSearchParams(window.location.search).has("join");
+
+  const rollD20 = () => Math.floor(Math.random() * 20) + 1;
+
+  const parseDexMod = (statsJson: string): number => {
+    try {
+      const s = JSON.parse(statsJson) as Record<string, unknown>;
+      const dex = typeof s.dex === "number" ? s.dex : typeof s.DEX === "number" ? s.DEX as number : 10;
+      return Math.floor((dex - 10) / 2);
+    } catch { return 0; }
+  };
+
+  const openInitiativeDialog = () => {
+    const inits: Record<number, number> = {};
+    for (const p of players ?? []) {
+      const mod = parseDexMod(p.stats ?? "{}");
+      inits[p.id] = Math.max(1, rollD20() + mod);
+    }
+    setPlayerInits(inits);
+    setEnemyDrafts([]);
+    setNewEnemyName("");
+    setNewEnemyInit(10);
+    setInitiativeOpen(true);
+  };
+
+  const rerollAllInitiatives = () => {
+    const inits: Record<number, number> = {};
+    for (const p of players ?? []) {
+      const mod = parseDexMod(p.stats ?? "{}");
+      inits[p.id] = Math.max(1, rollD20() + mod);
+    }
+    setPlayerInits(inits);
+  };
+
+  const addEnemyDraft = () => {
+    if (!newEnemyName.trim()) return;
+    setEnemyDrafts(prev => [...prev, { id: Date.now().toString(), name: newEnemyName.trim(), initiative: newEnemyInit }]);
+    setNewEnemyName("");
+    setNewEnemyInit(10);
+  };
+
+  const handleStartCombat = async () => {
+    if (isSubmittingInit) return;
+    setIsSubmittingInit(true);
+    try {
+      const entries = [
+        ...(players ?? []).map(p => ({
+          name: p.characterName,
+          initiative: playerInits[p.id] ?? 10,
+          hp: p.hp,
+          maxHp: p.maxHp,
+          isEnemy: false,
+          status: null,
+        })),
+        ...enemyDrafts.map(e => ({
+          name: e.name,
+          initiative: e.initiative,
+          hp: null,
+          maxHp: null,
+          isEnemy: true,
+          status: null,
+        })),
+      ];
+      const BASE = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+      const resp = await fetch(`${BASE}/api/campaign/sessions/${sessionId}/initiative`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entries }),
+      });
+      if (!resp.ok) throw new Error("Failed to set initiative");
+      const data = await resp.json() as { combatState: CombatState };
+      setCombatState(data.combatState);
+      setSidebarTab("combat");
+      broadcast({ type: "combat_update", combatState: data.combatState });
+      setInitiativeOpen(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingInit(false);
+    }
+  };
+
+  const handleNextTurn = async () => {
+    const BASE = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+    const resp = await fetch(`${BASE}/api/campaign/sessions/${sessionId}/initiative/next`, { method: "POST" });
+    if (!resp.ok) return;
+    const data = await resp.json() as { combatState: CombatState };
+    setCombatState(data.combatState);
+    broadcast({ type: "combat_update", combatState: data.combatState });
+  };
+
+  const handleEndCombat = async () => {
+    const BASE = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+    await fetch(`${BASE}/api/campaign/sessions/${sessionId}/initiative`, { method: "DELETE" });
+    setCombatState(null);
+    setSidebarTab("status");
+    broadcast({ type: "combat_update", combatState: null });
+  };
 
   const handleSaveHp = (playerId: number, maxHp: number) => {
     const clamped = Math.max(0, Math.min(editHpValue, maxHp));
@@ -1017,18 +1122,18 @@ export default function Session() {
                 </span>
               )}
             </button>
-            {combatState && (
-              <button
-                onClick={() => setSidebarTab("combat")}
-                className={`flex items-center gap-1 flex-1 justify-center py-1 rounded text-sm font-serif transition-colors relative ${sidebarTab === "combat" ? "bg-red-900/20 text-red-400" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                <Swords className="w-3.5 h-3.5" />
-                戰鬥
+            <button
+              onClick={() => setSidebarTab("combat")}
+              className={`flex items-center gap-1 flex-1 justify-center py-1 rounded text-sm font-serif transition-colors relative ${sidebarTab === "combat" ? "bg-red-900/20 text-red-400" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <Swords className="w-3.5 h-3.5" />
+              戰鬥
+              {combatState && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 text-white rounded-full text-[9px] flex items-center justify-center font-mono animate-pulse">
                   {combatState.round}
                 </span>
-              </button>
-            )}
+              )}
+            </button>
           </div>
 
           {sidebarTab === "status" && (
@@ -1121,87 +1226,226 @@ export default function Session() {
             </div>
           )}
 
-          {sidebarTab === "combat" && combatState && (
+          {sidebarTab === "combat" && (
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-1.5">
-                  <Swords className="w-4 h-4 text-red-400" />
-                  <span className="font-serif text-base text-red-400">先攻順序</span>
+              {!combatState ? (
+                <div className="flex-1 flex flex-col items-center justify-center gap-4 py-6">
+                  <Swords className="w-10 h-10 text-red-900/50" />
+                  <p className="text-sm text-muted-foreground text-center italic px-2">
+                    尚未開始戰鬥。<br />點擊下方按鈕設定先攻順序。
+                  </p>
+                  <button
+                    onClick={openInitiativeDialog}
+                    className="flex items-center gap-2 px-4 py-2 rounded border border-red-800/50 bg-red-950/20 text-red-300 text-sm font-serif hover:bg-red-950/40 transition-colors"
+                  >
+                    <Swords className="w-4 h-4" /> 開始戰鬥
+                  </button>
                 </div>
-                <Badge variant="outline" className="border-red-800/50 text-red-400 bg-red-950/30 font-mono text-xs px-2">
-                  第 {combatState.round} 回合
-                </Badge>
-              </div>
-              <ScrollArea className="flex-1">
-                <div className="space-y-1.5 pr-1">
-                  {combatState.order.map((entry, idx) => {
-                    const isActive = entry.name === turnState.who;
-                    const isDead = entry.status === "死亡";
-                    return (
-                      <motion.div
-                        key={`${entry.name}-${idx}`}
-                        initial={{ opacity: 0, x: 8 }}
-                        animate={{ opacity: isDead ? 0.4 : 1, x: 0 }}
-                        transition={{ delay: idx * 0.04 }}
-                        className={`relative p-2 rounded border text-xs transition-all duration-300 ${
-                          isActive
-                            ? "border-red-500/60 bg-red-950/40 shadow-[0_0_8px_rgba(239,68,68,0.15)]"
-                            : entry.isEnemy
-                              ? "border-red-900/40 bg-red-950/10"
-                              : "border-primary/20 bg-background"
-                        }`}
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-3 gap-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Swords className="w-4 h-4 text-red-400 shrink-0" />
+                      <span className="font-serif text-base text-red-400 truncate">先攻順序</span>
+                      <Badge variant="outline" className="border-red-800/50 text-red-400 bg-red-950/30 font-mono text-[10px] px-1.5 shrink-0">
+                        第 {combatState.round} 回合
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={handleNextTurn}
+                        title="下一位"
+                        className="flex items-center gap-1 px-2 py-1 rounded bg-red-900/30 text-red-300 hover:bg-red-900/60 text-[10px] font-mono transition-colors"
                       >
-                        {isActive && (
-                          <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-red-500 rounded-l" />
-                        )}
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            {entry.isEnemy ? (
-                              <Skull className="w-3 h-3 text-red-400 shrink-0" />
-                            ) : (
-                              <Shield className="w-3 h-3 text-primary shrink-0" />
-                            )}
-                            <span className={`font-serif font-bold truncate ${isActive ? "text-red-300" : entry.isEnemy ? "text-red-200/80" : "text-foreground"}`}>
-                              {entry.name}
-                            </span>
-                          </div>
-                          <span className="font-mono text-muted-foreground/70 text-[10px] shrink-0 ml-1">
-                            先攻 {entry.initiative}
-                          </span>
-                        </div>
-                        {entry.hp !== null && entry.maxHp !== null && (
-                          <div className="space-y-0.5">
-                            <div className="flex justify-between text-[10px] text-muted-foreground/60">
-                              <span>HP</span>
-                              <span className="font-mono">{entry.hp}/{entry.maxHp}</span>
-                            </div>
-                            <div className="h-1 bg-muted/30 rounded-full overflow-hidden">
-                              <motion.div
-                                className={`h-full rounded-full ${
-                                  entry.hp / entry.maxHp > 0.5 ? "bg-green-500" :
-                                  entry.hp / entry.maxHp > 0.25 ? "bg-yellow-500" : "bg-red-500"
-                                }`}
-                                initial={{ width: 0 }}
-                                animate={{ width: `${Math.max(0, (entry.hp / entry.maxHp) * 100)}%` }}
-                                transition={{ duration: 0.5 }}
+                        <ChevronRight className="w-3 h-3" /> 下一位
+                      </button>
+                      <button
+                        onClick={handleEndCombat}
+                        title="結束戰鬥"
+                        className="p-1 rounded hover:bg-muted/30 text-muted-foreground hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <ScrollArea className="flex-1">
+                    <div className="space-y-1.5 pr-1">
+                      {combatState.order.map((entry, idx) => {
+                        const activeIdx = (combatState as unknown as { activeIndex?: number }).activeIndex ?? combatState.order.findIndex(e => e.name === turnState.who);
+                        const isActive = idx === activeIdx;
+                        const isDead = entry.status === "死亡";
+                        return (
+                          <motion.div
+                            key={`${entry.name}-${idx}`}
+                            initial={{ opacity: 0, x: 8 }}
+                            animate={{ opacity: isDead ? 0.4 : 1, x: 0 }}
+                            transition={{ delay: idx * 0.04 }}
+                            className={`relative p-2 rounded border text-xs transition-all duration-300 ${
+                              isActive
+                                ? "border-red-500/60 bg-red-950/40 shadow-[0_0_8px_rgba(239,68,68,0.15)]"
+                                : entry.isEnemy
+                                  ? "border-red-900/40 bg-red-950/10"
+                                  : "border-primary/20 bg-background"
+                            }`}
+                          >
+                            {isActive && (
+                              <motion.span
+                                className="absolute left-0 top-0 bottom-0 w-0.5 bg-red-500 rounded-l"
+                                layoutId="initiative-active-bar"
+                                transition={{ type: "spring", stiffness: 400, damping: 30 }}
                               />
+                            )}
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {entry.isEnemy ? (
+                                  <Skull className="w-3 h-3 text-red-400 shrink-0" />
+                                ) : (
+                                  <Shield className="w-3 h-3 text-primary shrink-0" />
+                                )}
+                                <span className={`font-serif font-bold truncate ${isActive ? "text-red-300" : entry.isEnemy ? "text-red-200/80" : "text-foreground"}`}>
+                                  {entry.name}
+                                </span>
+                              </div>
+                              <span className="font-mono text-muted-foreground/70 text-[10px] shrink-0 ml-1">
+                                先攻 {entry.initiative}
+                              </span>
                             </div>
-                          </div>
-                        )}
-                        {entry.status && (
-                          <div className="mt-1">
-                            <span className="text-[9px] px-1 py-0.5 rounded bg-yellow-900/40 border border-yellow-700/40 text-yellow-400 font-mono">
-                              {entry.status}
-                            </span>
-                          </div>
-                        )}
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
+                            {entry.hp !== null && entry.maxHp !== null && (
+                              <div className="space-y-0.5">
+                                <div className="flex justify-between text-[10px] text-muted-foreground/60">
+                                  <span>HP</span>
+                                  <span className="font-mono">{entry.hp}/{entry.maxHp}</span>
+                                </div>
+                                <div className="h-1 bg-muted/30 rounded-full overflow-hidden">
+                                  <motion.div
+                                    className={`h-full rounded-full ${
+                                      entry.hp / entry.maxHp! > 0.5 ? "bg-green-500" :
+                                      entry.hp / entry.maxHp! > 0.25 ? "bg-yellow-500" : "bg-red-500"
+                                    }`}
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${Math.max(0, (entry.hp / entry.maxHp!) * 100)}%` }}
+                                    transition={{ duration: 0.5 }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            {entry.status && (
+                              <div className="mt-1">
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-yellow-900/40 border border-yellow-700/40 text-yellow-400 font-mono">
+                                  {entry.status}
+                                </span>
+                              </div>
+                            )}
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </>
+              )}
             </div>
           )}
+
+          {/* Initiative setup dialog */}
+          <Dialog open={initiativeOpen} onOpenChange={setInitiativeOpen}>
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="font-serif flex items-center gap-2">
+                  <Swords className="w-5 h-5 text-red-400" /> 設定先攻順序
+                </DialogTitle>
+                <DialogDescription>已為所有玩家自動擲骰，可手動調整。</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                {(players ?? []).length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs uppercase tracking-wider text-muted-foreground">玩家</span>
+                      <button
+                        onClick={rerollAllInitiatives}
+                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <RotateCcw className="w-3 h-3" /> 全部重擲
+                      </button>
+                    </div>
+                    {(players ?? []).map(p => (
+                      <div key={p.id} className="flex items-center gap-3 p-2 rounded border border-border bg-background">
+                        <Shield className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span className="font-serif text-sm flex-1 truncate">{p.characterName}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => setPlayerInits(prev => ({ ...prev, [p.id]: Math.max(1, (prev[p.id] ?? 10) - 1) }))}
+                            className="w-5 h-5 flex items-center justify-center rounded bg-muted/30 hover:bg-muted/60 text-xs transition-colors"
+                          >−</button>
+                          <input
+                            type="number"
+                            min={1}
+                            max={30}
+                            value={playerInits[p.id] ?? 10}
+                            onChange={e => setPlayerInits(prev => ({ ...prev, [p.id]: Math.max(1, parseInt(e.target.value) || 1) }))}
+                            className="w-10 text-center bg-muted/20 border border-border rounded text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary py-0.5"
+                          />
+                          <button
+                            onClick={() => setPlayerInits(prev => ({ ...prev, [p.id]: Math.min(30, (prev[p.id] ?? 10) + 1) }))}
+                            className="w-5 h-5 flex items-center justify-center rounded bg-muted/30 hover:bg-muted/60 text-xs transition-colors"
+                          >+</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">敵人</span>
+                  {enemyDrafts.map(e => (
+                    <div key={e.id} className="flex items-center gap-3 p-2 rounded border border-red-900/40 bg-red-950/10">
+                      <Skull className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                      <span className="font-serif text-sm flex-1 truncate text-red-200/80">{e.name}</span>
+                      <span className="font-mono text-xs text-muted-foreground shrink-0">先攻 {e.initiative}</span>
+                      <button
+                        onClick={() => setEnemyDrafts(prev => prev.filter(x => x.id !== e.id))}
+                        className="text-muted-foreground hover:text-red-400 transition-colors shrink-0"
+                      ><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="敵人名稱"
+                      value={newEnemyName}
+                      onChange={e => setNewEnemyName(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") addEnemyDraft(); }}
+                      className="flex-1 bg-muted/20 border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={newEnemyInit}
+                      onChange={e => setNewEnemyInit(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-14 text-center bg-muted/20 border border-border rounded px-1 py-1 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <button
+                      onClick={addEnemyDraft}
+                      disabled={!newEnemyName.trim()}
+                      className="p-1.5 rounded bg-red-900/30 text-red-300 hover:bg-red-900/60 disabled:opacity-40 transition-colors"
+                    ><Plus className="w-4 h-4" /></button>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                  <Button variant="ghost" size="sm" onClick={() => setInitiativeOpen(false)}>取消</Button>
+                  <Button
+                    size="sm"
+                    disabled={isSubmittingInit || ((players ?? []).length === 0 && enemyDrafts.length === 0)}
+                    onClick={handleStartCombat}
+                    className="bg-red-900/60 text-red-100 hover:bg-red-900/80 border border-red-700/50"
+                  >
+                    {isSubmittingInit ? "設定中..." : "開始戰鬥"}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </aside>
       </div>
     </div>

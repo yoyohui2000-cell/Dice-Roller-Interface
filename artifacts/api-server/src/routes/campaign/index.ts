@@ -390,4 +390,54 @@ router.get("/campaign/sessions/:id/dice-rolls", async (req, res): Promise<void> 
   })));
 });
 
+router.post("/campaign/sessions/:id/initiative", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const { entries } = req.body as {
+    entries: Array<{ name: string; initiative: number; hp: number | null; maxHp: number | null; isEnemy: boolean; status: string | null }>;
+  };
+  if (!Array.isArray(entries) || entries.length === 0) {
+    res.status(400).json({ error: "entries required" }); return;
+  }
+  const sorted = [...entries].sort((a, b) => b.initiative - a.initiative);
+  const newState = { round: 1, activeIndex: 0, order: sorted };
+  const [session] = await db.update(campaignSessions)
+    .set({ combatState: newState as unknown as CombatState, phase: "combat", updatedAt: new Date() })
+    .where(eq(campaignSessions.id, id))
+    .returning();
+  if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+  res.json({ combatState: session.combatState });
+});
+
+router.post("/campaign/sessions/:id/initiative/next", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [session] = await db.select().from(campaignSessions).where(eq(campaignSessions.id, id));
+  if (!session || !session.combatState) {
+    res.status(400).json({ error: "No active combat" }); return;
+  }
+  const cs = session.combatState as unknown as {
+    round: number; activeIndex?: number;
+    order: Array<{ name: string; initiative: number; hp: number | null; maxHp: number | null; isEnemy: boolean; status: string | null }>;
+  };
+  const cur = cs.activeIndex ?? 0;
+  const next = (cur + 1) % cs.order.length;
+  const updated = { ...cs, activeIndex: next, round: next === 0 ? cs.round + 1 : cs.round };
+  await db.update(campaignSessions)
+    .set({ combatState: updated as unknown as CombatState, updatedAt: new Date() })
+    .where(eq(campaignSessions.id, id));
+  res.json({ combatState: updated });
+});
+
+router.delete("/campaign/sessions/:id/initiative", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [session] = await db.update(campaignSessions)
+    .set({ combatState: null, phase: "exploration", updatedAt: new Date() })
+    .where(eq(campaignSessions.id, id))
+    .returning();
+  if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+  res.json({ ok: true });
+});
+
 export default router;
