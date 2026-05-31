@@ -226,6 +226,7 @@ export const ListSessionPlayersResponseItem = zod.object({
   "ac": zod.number(),
   "level": zod.number(),
   "stats": zod.string(),
+  "avatarDescription": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListSessionPlayersResponse = zod.array(ListSessionPlayersResponseItem)
@@ -261,6 +262,8 @@ export const UpdatePlayerParams = zod.object({
 })
 
 export const UpdatePlayerBody = zod.object({
+  "characterName": zod.string().optional(),
+  "avatarDescription": zod.string().optional(),
   "hp": zod.number().optional(),
   "maxHp": zod.number().optional(),
   "ac": zod.number().optional(),
@@ -281,6 +284,7 @@ export const UpdatePlayerResponse = zod.object({
   "ac": zod.number(),
   "level": zod.number(),
   "stats": zod.string(),
+  "avatarDescription": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 

@@ -27,6 +27,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRealtimeSession, type RealtimeEvent, type TurnState, type CombatState } from "@/hooks/use-realtime-session";
 import { usePresence } from "@/hooks/use-presence";
 import CharacterSheet, { type CharacterSheetSaveData, type GmChange } from "@/components/character-sheet";
+import { EditCharacterDialog } from "@/components/edit-character-dialog";
 import CharacterCreationDialog, { type CharacterCreationData } from "@/components/character-creation-dialog";
 
 type NpcData = {
@@ -1065,12 +1066,26 @@ export default function Session() {
             ) : players?.length === 0 ? (
               <div className="text-sm text-muted-foreground text-center italic py-8">隊伍中還沒有人</div>
             ) : selectedPlayer ? (
-              <CharacterSheet
-                player={selectedPlayer}
-                onSave={handleSaveCharacter}
-                isSaving={updatePlayer.isPending}
-                gmChange={gmChangesByPlayer[selectedPlayer.id]}
-              />
+              <div className="flex flex-col h-full overflow-hidden">
+                {selectedPlayer.userId === user?.id && (
+                  <div className="flex items-center justify-between px-4 pt-3 pb-1 shrink-0">
+                    <span className="text-xs text-muted-foreground font-serif truncate">{selectedPlayer.characterName}</span>
+                    <EditCharacterDialog
+                      player={selectedPlayer}
+                      invalidateKeys={[getListSessionPlayersQueryKey(sessionId)]}
+                      triggerClassName="h-6 w-6 text-muted-foreground/50 hover:text-primary"
+                    />
+                  </div>
+                )}
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <CharacterSheet
+                    player={selectedPlayer}
+                    onSave={handleSaveCharacter}
+                    isSaving={updatePlayer.isPending}
+                    gmChange={gmChangesByPlayer[selectedPlayer.id]}
+                  />
+                </div>
+              </div>
             ) : null}
           </div>
         </aside>

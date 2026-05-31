@@ -105,6 +105,8 @@ export interface Player {
   ac: number;
   level: number;
   stats: string;
+  /** @nullable */
+  avatarDescription?: string | null;
   createdAt: string;
 }
 
@@ -123,6 +125,8 @@ export interface PlayerInput {
 }
 
 export interface PlayerUpdate {
+  characterName?: string;
+  avatarDescription?: string;
   hp?: number;
   maxHp?: number;
   ac?: number;

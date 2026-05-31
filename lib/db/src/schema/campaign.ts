@@ -28,6 +28,7 @@ export const players = pgTable("players", {
   ac: integer("ac").notNull().default(10),
   level: integer("level").notNull().default(1),
   stats: text("stats").notNull().default("{}"),
+  avatarDescription: text("avatar_description"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

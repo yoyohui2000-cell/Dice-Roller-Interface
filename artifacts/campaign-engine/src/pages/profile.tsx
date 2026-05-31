@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollText, ArrowLeft, Shield, Heart, Swords, User } from "lucide-react";
+import { ScrollText, ArrowLeft, Shield, Heart, Swords, User, BookOpen } from "lucide-react";
+import { EditCharacterDialog } from "@/components/edit-character-dialog";
 
 interface CharacterEntry {
   id: number;
@@ -18,6 +20,7 @@ interface CharacterEntry {
   ac: number;
   level: number;
   stats: string;
+  avatarDescription?: string | null;
   createdAt: string;
   sessionId: number;
   sessionName: string;
@@ -50,7 +53,7 @@ function statMod(v: number) {
   return m >= 0 ? `+${m}` : `${m}`;
 }
 
-function CharacterCard({ char }: { char: CharacterEntry }) {
+function CharacterCard({ char, queryKey }: { char: CharacterEntry; queryKey: unknown[] }) {
   let parsedStats: Record<string, number> = {};
   try { parsedStats = JSON.parse(char.stats); } catch {}
 
@@ -82,7 +85,14 @@ function CharacterCard({ char }: { char: CharacterEntry }) {
             {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="font-serif text-xl text-primary truncate">{char.characterName}</h3>
+            <div className="flex items-center gap-1">
+              <h3 className="font-serif text-xl text-primary truncate">{char.characterName}</h3>
+              <EditCharacterDialog
+                player={{ id: char.id, characterName: char.characterName, avatarDescription: char.avatarDescription }}
+                invalidateKeys={[queryKey]}
+                triggerClassName="h-6 w-6 text-muted-foreground/50 hover:text-primary flex-shrink-0"
+              />
+            </div>
             <p className="text-xs text-muted-foreground truncate">玩家：{char.name}</p>
           </div>
           <div className="text-right flex-shrink-0">
@@ -90,6 +100,16 @@ function CharacterCard({ char }: { char: CharacterEntry }) {
             <div className="text-2xl font-serif text-primary font-bold">{char.level}</div>
           </div>
         </div>
+
+        {/* Avatar description */}
+        {char.avatarDescription && (
+          <div className="bg-muted/20 rounded-lg px-3 py-2.5 border border-border/50 flex gap-2">
+            <BookOpen className="w-3.5 h-3.5 text-primary/50 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
+              {char.avatarDescription}
+            </p>
+          </div>
+        )}
 
         {/* Badges */}
         <div className="flex flex-wrap gap-2">
@@ -155,8 +175,9 @@ function CharacterCard({ char }: { char: CharacterEntry }) {
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
 
+  const queryKey = ["my-characters", user?.id];
   const { data: characters, isLoading } = useQuery<CharacterEntry[]>({
-    queryKey: ["my-characters", user?.id],
+    queryKey,
     enabled: !!user?.id,
     queryFn: async () => {
       const res = await fetch(`/api/campaign/my-characters?userId=${encodeURIComponent(user!.id)}`);
@@ -236,7 +257,9 @@ export default function ProfilePage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {characters.map(char => <CharacterCard key={char.id} char={char} />)}
+          {characters.map(char => (
+            <CharacterCard key={char.id} char={char} queryKey={queryKey} />
+          ))}
         </div>
       )}
     </div>

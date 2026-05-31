@@ -138,6 +138,7 @@ router.get("/campaign/my-characters", async (req, res): Promise<void> => {
       sessionId: campaignSessions.id,
       sessionName: campaignSessions.name,
       sessionPhase: campaignSessions.phase,
+      avatarDescription: players.avatarDescription,
     })
     .from(players)
     .innerJoin(campaignSessions, eq(players.sessionId, campaignSessions.id))
