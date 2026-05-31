@@ -16,8 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Send, Dices, UserPlus, Wifi, WifiOff, Clock, Users, BookOpen, Swords, Shield, Skull, X } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ArrowLeft, Send, Dices, UserPlus, Wifi, WifiOff, Clock, Users, BookOpen, Swords, Shield, Skull, X, Link2, Check } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRealtimeSession, type RealtimeEvent, type TurnState, type CombatState } from "@/hooks/use-realtime-session";
@@ -79,6 +79,25 @@ export default function Session() {
   const [sidebarTab, setSidebarTab] = useState<"status" | "npcs" | "combat">("status");
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const isJoinLink = new URLSearchParams(window.location.search).has("join");
+
+  const handleShareLink = async () => {
+    const url = `${window.location.origin}${window.location.pathname}?join=1`;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = url;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2500);
+  };
   const pendingDiceAutoSubmit = useRef(false);
   const handleSendRef = useRef<() => void>(() => {});
 
@@ -90,6 +109,12 @@ export default function Session() {
       setSelectedPlayerId(players[0].id);
     }
   }, [players, selectedPlayerId]);
+
+  useEffect(() => {
+    if (isJoinLink && !sessionLoading) {
+      setPlayerModalOpen(true);
+    }
+  }, [isJoinLink, sessionLoading]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -474,6 +499,37 @@ export default function Session() {
           <Button variant="ghost" size="icon" className="md:hidden text-primary hover:bg-primary/20" onClick={() => { setMobileRightOpen(v => !v); setMobileLeftOpen(false); }}>
             <BookOpen className="w-5 h-5" />
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-primary hover:bg-primary/20 relative"
+            onClick={handleShareLink}
+            title="分享此戰役連結"
+          >
+            <AnimatePresence mode="wait">
+              {linkCopied ? (
+                <motion.span key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
+                  <Check className="w-4 h-4 text-green-400" />
+                </motion.span>
+              ) : (
+                <motion.span key="link" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
+                  <Link2 className="w-4 h-4" />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </Button>
+          <AnimatePresence>
+            {linkCopied && (
+              <motion.span
+                initial={{ opacity: 0, x: 4 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 4 }}
+                className="text-xs text-green-400 font-serif hidden sm:inline whitespace-nowrap"
+              >
+                連結已複製！
+              </motion.span>
+            )}
+          </AnimatePresence>
           <div className="flex items-center gap-1 sm:gap-2 text-xs text-muted-foreground">
             {isConnected
               ? <><Wifi className="w-4 h-4 text-green-500" /><span className="hidden sm:inline text-green-500">即時同步</span></>
@@ -504,7 +560,14 @@ export default function Session() {
               </DialogTrigger>
               <DialogContent className="bg-card border-border">
                 <DialogHeader>
-                  <DialogTitle className="font-serif text-2xl text-primary">創造新角色</DialogTitle>
+                  <DialogTitle className="font-serif text-2xl text-primary">
+                    {isJoinLink ? "加入冒險！" : "創造新角色"}
+                  </DialogTitle>
+                  {isJoinLink && (
+                    <DialogDescription className="font-serif text-base text-muted-foreground pt-1">
+                      你的朋友邀請你加入《{session?.name}》。先創造你的角色，然後就能開始冒險了！
+                    </DialogDescription>
+                  )}
                 </DialogHeader>
                 <form onSubmit={handleCreatePlayer} className="space-y-3 pt-2">
                   <div className="grid grid-cols-2 gap-3">
