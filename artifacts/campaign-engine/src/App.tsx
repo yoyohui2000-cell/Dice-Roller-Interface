@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/error-boundary";
 import NotFound from "@/pages/not-found";
+import AuthPage from "@/pages/auth";
+import { AuthContext, useAuthProvider } from "@/hooks/use-auth";
 
 const Hub = lazy(() => import("@/pages/hub"));
 const Session = lazy(() => import("@/pages/session"));
@@ -35,13 +37,43 @@ function Router() {
   );
 }
 
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const auth = useAuthProvider();
+
+  if (auth.loading) {
+    return (
+      <div className="dark min-h-screen bg-background flex items-center justify-center">
+        <div className="font-serif text-primary text-xl animate-pulse">召喚冒險者...</div>
+      </div>
+    );
+  }
+
+  if (!auth.user) {
+    return (
+      <div className="dark min-h-screen bg-background text-foreground font-sans">
+        <AuthContext.Provider value={auth}>
+          <AuthPage />
+        </AuthContext.Provider>
+      </div>
+    );
+  }
+
+  return (
+    <AuthContext.Provider value={auth}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
+        <AuthGate>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+        </AuthGate>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

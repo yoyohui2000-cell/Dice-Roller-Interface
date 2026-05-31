@@ -17,6 +17,7 @@ export const campaignSessions = pgTable("campaign_sessions", {
 export const players = pgTable("players", {
   id: serial("id").primaryKey(),
   sessionId: integer("session_id").notNull().references(() => campaignSessions.id, { onDelete: "cascade" }),
+  userId: text("user_id"),
   name: text("name").notNull(),
   characterName: text("character_name").notNull(),
   race: text("race").notNull(),

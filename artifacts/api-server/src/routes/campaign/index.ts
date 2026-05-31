@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, conversations, campaignSessions, players, diceRolls, narrativeHistory, npcs } from "@workspace/db";
 import { ai } from "@workspace/integrations-gemini-ai";
 import {
@@ -113,6 +113,26 @@ router.get("/campaign/sessions/:id/players", async (req, res): Promise<void> => 
   }
   const sessionPlayers = await db.select().from(players).where(eq(players.sessionId, params.data.id));
   res.json(sessionPlayers.map(p => ({ ...p, createdAt: p.createdAt.toISOString() })));
+});
+
+router.get("/campaign/sessions/:id/players/me", async (req, res): Promise<void> => {
+  const params = ListSessionPlayersParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const userId = req.query.userId as string | undefined;
+  if (!userId) {
+    res.status(400).json({ error: "userId query param required" });
+    return;
+  }
+  const [player] = await db.select().from(players)
+    .where(and(eq(players.sessionId, params.data.id), eq(players.userId, userId)));
+  if (!player) {
+    res.status(404).json({ error: "No player found for this user in this session" });
+    return;
+  }
+  res.json({ ...player, createdAt: player.createdAt.toISOString() });
 });
 
 router.post("/campaign/sessions/:id/players", async (req, res): Promise<void> => {

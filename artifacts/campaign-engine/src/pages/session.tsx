@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useAuth } from "@/hooks/use-auth";
 import { useParams, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -135,6 +136,7 @@ const ATTITUDE_STYLE: Record<string, string> = {
 export default function Session() {
   const { id } = useParams();
   const sessionId = parseInt(id || "0", 10);
+  const { user } = useAuth();
 
   const { data: session, isLoading: sessionLoading, refetch: refetchSession } = useGetCampaignSession(sessionId, {
     query: { enabled: !!sessionId, queryKey: getGetCampaignSessionQueryKey(sessionId) }
@@ -347,22 +349,10 @@ export default function Session() {
   useEffect(() => {
     if (!players || players.length === 0) return;
     if (selectedPlayerId) return;
-    const stored = localStorage.getItem(`session:${sessionId}:myPlayerId`);
-    if (stored) {
-      const id = parseInt(stored, 10);
-      if (players.some(p => p.id === id)) {
-        setSelectedPlayerId(id);
-        return;
-      }
-    }
-    setSelectedPlayerId(players[0].id);
-  }, [players, selectedPlayerId, sessionId]);
-
-  useEffect(() => {
-    if (selectedPlayerId) {
-      localStorage.setItem(`session:${sessionId}:myPlayerId`, String(selectedPlayerId));
-    }
-  }, [selectedPlayerId, sessionId]);
+    if (!user) return;
+    const myPlayer = players.find(p => p.userId === user.id);
+    if (myPlayer) setSelectedPlayerId(myPlayer.id);
+  }, [players, selectedPlayerId, user]);
 
   useEffect(() => {
     if (isJoinLink && !sessionLoading) {
@@ -802,6 +792,7 @@ export default function Session() {
     addPlayer.mutate({
       id: sessionId,
       data: {
+        userId: user?.id,
         name: data.name, characterName: data.characterName,
         race: data.race, class: data.class, background: data.background,
         hp: data.hp, maxHp: data.maxHp, ac: data.ac, level: data.level,
@@ -811,7 +802,6 @@ export default function Session() {
       onSuccess: (player) => {
         setPlayerModalOpen(false);
         setSelectedPlayerId(player.id);
-        localStorage.setItem(`session:${sessionId}:myPlayerId`, String(player.id));
         refetchPlayers();
         broadcast({
           type: "player_joined",

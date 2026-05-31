@@ -215,6 +215,7 @@ export const ListSessionPlayersParams = zod.object({
 export const ListSessionPlayersResponseItem = zod.object({
   "id": zod.number(),
   "sessionId": zod.number(),
+  "userId": zod.string().nullish(),
   "name": zod.string(),
   "characterName": zod.string(),
   "race": zod.string(),
@@ -238,6 +239,7 @@ export const AddSessionPlayerParams = zod.object({
 })
 
 export const AddSessionPlayerBody = zod.object({
+  "userId": zod.string().optional(),
   "name": zod.string(),
   "characterName": zod.string(),
   "race": zod.string(),

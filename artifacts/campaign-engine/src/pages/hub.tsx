@@ -4,15 +4,17 @@ import { useListCampaignSessions, useCreateCampaignSession } from "@workspace/ap
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, ScrollText } from "lucide-react";
+import { Plus, ScrollText, LogOut, User } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function Hub() {
   const { data: sessions, isLoading, refetch } = useListCampaignSessions();
   const createSession = useCreateCampaignSession();
+  const { user, signOut } = useAuth();
   
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
@@ -46,49 +48,66 @@ export default function Hub() {
           <p className="text-muted-foreground mt-1 sm:mt-2 font-serif text-base sm:text-lg">古老的羊皮紙上，記載著未完的故事...</p>
         </div>
         
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button className="font-serif text-base sm:text-lg px-4 sm:px-6 h-10 sm:h-12 self-start sm:self-auto">
-              <Plus className="w-5 h-5 mr-2" />
-              開啟新局
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] bg-card border-border">
-            <DialogHeader>
-              <DialogTitle className="font-serif text-2xl text-primary">創造新冒險</DialogTitle>
-              <DialogDescription>
-                設定你的新戰役。準備好進入未知的世界了嗎？
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreate} className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">戰役名稱</Label>
-                <Input 
-                  id="name" 
-                  value={name} 
-                  onChange={e => setName(e.target.value)} 
-                  placeholder="例如：龍與地下城：失落的礦坑"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="world">世界觀描述 (選填)</Label>
-                <Textarea 
-                  id="world" 
-                  value={worldDescription} 
-                  onChange={e => setWorldDescription(e.target.value)} 
-                  placeholder="描述這個世界的背景、當前的情勢..."
-                  className="min-h-[100px]"
-                />
-              </div>
-              <div className="flex justify-end pt-4">
-                <Button type="submit" disabled={createSession.isPending}>
-                  {createSession.isPending ? "創造中..." : "確認創造"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-3 flex-wrap">
+          {user && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground border border-border rounded-lg px-3 py-1.5 bg-card">
+              <User className="w-3.5 h-3.5" />
+              <span className="max-w-[160px] truncate">{user.email}</span>
+            </div>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={signOut}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <LogOut className="w-4 h-4 mr-1.5" />
+            登出
+          </Button>
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+              <Button className="font-serif text-base sm:text-lg px-4 sm:px-6 h-10 sm:h-12 self-start sm:self-auto">
+                <Plus className="w-5 h-5 mr-2" />
+                開啟新局
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px] bg-card border-border">
+              <DialogHeader>
+                <DialogTitle className="font-serif text-2xl text-primary">創造新冒險</DialogTitle>
+                <DialogDescription>
+                  設定你的新戰役。準備好進入未知的世界了嗎？
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreate} className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">戰役名稱</Label>
+                  <Input 
+                    id="name" 
+                    value={name} 
+                    onChange={e => setName(e.target.value)} 
+                    placeholder="例如：龍與地下城：失落的礦坑"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="world">世界觀描述 (選填)</Label>
+                  <Textarea 
+                    id="world" 
+                    value={worldDescription} 
+                    onChange={e => setWorldDescription(e.target.value)} 
+                    placeholder="描述這個世界的背景、當前的情勢..."
+                    className="min-h-[100px]"
+                  />
+                </div>
+                <div className="flex justify-end pt-4">
+                  <Button type="submit" disabled={createSession.isPending}>
+                    {createSession.isPending ? "創造中..." : "確認創造"}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

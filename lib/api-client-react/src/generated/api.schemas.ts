@@ -93,6 +93,8 @@ export interface CampaignSessionUpdate {
 export interface Player {
   id: number;
   sessionId: number;
+  /** @nullable */
+  userId?: string | null;
   name: string;
   characterName: string;
   race: string;
@@ -107,6 +109,7 @@ export interface Player {
 }
 
 export interface PlayerInput {
+  userId?: string;
   name: string;
   characterName: string;
   race: string;
