@@ -29,6 +29,79 @@ type NpcData = {
   createdAt: string; updatedAt: string;
 };
 
+type HpProposal = {
+  id: string;
+  playerId: number;
+  characterName: string;
+  delta: number;
+  label: string;
+};
+
+type PlayerLike = { id: number; characterName: string; hp: number; maxHp: number };
+
+function parseHpChanges(text: string, players: PlayerLike[], turnWho: string): HpProposal[] {
+  const proposals: HpProposal[] = [];
+  const seen = new Set<string>();
+
+  const addProposal = (amount: number, isDamage: boolean, idx: number) => {
+    if (amount <= 0 || amount > 999) return;
+    const delta = isDamage ? -amount : amount;
+    const ctx = text.substring(Math.max(0, idx - 100), idx + 100);
+
+    let target: PlayerLike | undefined;
+    for (const p of players) {
+      if (ctx.includes(p.characterName)) { target = p; break; }
+    }
+    if (!target && (ctx.includes("你") || ctx.includes("your") || ctx.includes("you "))) {
+      target = players.find(p => p.characterName === turnWho) ?? (players.length === 1 ? players[0] : undefined);
+    }
+    if (!target && players.length === 1) target = players[0];
+    if (!target) return;
+
+    const key = `${target.id}:${delta}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    proposals.push({
+      id: `${Date.now()}-${idx}`,
+      playerId: target.id,
+      characterName: target.characterName,
+      delta,
+      label: isDamage ? `受到 ${amount} 點傷害` : `恢復 ${amount} 點生命`,
+    });
+  };
+
+  const runAll = (patterns: RegExp[], isDamage: boolean) => {
+    for (const re of patterns) {
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        const amount = parseInt(m[1] ?? m[2] ?? "0");
+        addProposal(amount, isDamage, m.index);
+      }
+    }
+  };
+
+  runAll([
+    /受到\s*(\d+)\s*點?[^，。\n]{0,12}傷害/g,
+    /造成[了]?\s*(\d+)\s*點?[^，。\n]{0,12}傷害/g,
+    /takes?\s+(\d+)\s+(?:\w+\s+)?damage/gi,
+    /suffers?\s+(\d+)\s+(?:\w+\s+)?damage/gi,
+    /deals?\s+(\d+)\s+(?:\w+\s+)?damage/gi,
+  ], true);
+
+  runAll([
+    /恢復[了]?\s*(\d+)\s*點?(?:生命值?|HP|hp)/g,
+    /回復\s*(\d+)\s*點?(?:生命值?|HP|hp)/g,
+    /治癒[了]?\s*(\d+)\s*點?(?:生命值?|HP|hp)/g,
+    /heals?\s+(?:for\s+)?(\d+)\s+(?:hit\s+points?|hp)/gi,
+    /regains?\s+(\d+)\s+(?:hit\s+points?|hp)/gi,
+    /restores?\s+(\d+)\s+(?:hit\s+points?|hp)/gi,
+  ], false);
+
+  return proposals;
+}
+
 const ATTITUDE_STYLE: Record<string, string> = {
   "友善": "bg-green-900/40 text-green-400 border-green-700/50",
   "中立": "bg-muted text-muted-foreground border-border",
@@ -83,6 +156,12 @@ export default function Session() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [editingHpId, setEditingHpId] = useState<number | null>(null);
   const [editHpValue, setEditHpValue] = useState<number>(0);
+  const [hpProposals, setHpProposals] = useState<HpProposal[]>([]);
+  const streamStartPosRef = useRef<number>(0);
+  const playersRef = useRef(players);
+  const turnStateRef = useRef(turnState);
+  useEffect(() => { playersRef.current = players; }, [players]);
+  useEffect(() => { turnStateRef.current = turnState; }, [turnState]);
   const updatePlayer = useUpdatePlayer();
 
   const isJoinLink = new URLSearchParams(window.location.search).has("join");
@@ -221,6 +300,7 @@ export default function Session() {
         const rollText = event.rollInfo ? ` ${event.rollInfo}` : "";
         const line = `[${event.characterName}] ${event.action}${rollText}\n\n[GM] `;
         narrativeRef.current += line;
+        streamStartPosRef.current = narrativeRef.current.length;
         setNarrative(narrativeRef.current);
         setIsStreaming(true);
         break;
@@ -231,6 +311,7 @@ export default function Session() {
         break;
       }
       case "gm_done": {
+        const rawGmText = narrativeRef.current.slice(streamStartPosRef.current);
         narrativeRef.current = narrativeRef.current
           .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
           .replace(/\n?%%TURN:\{[^%]*\}%%\s*$/, "")
@@ -251,6 +332,16 @@ export default function Session() {
         }
         setTimeout(() => refetchSession(), 3500);
         setTimeout(() => fetchNpcs(), 3000);
+        if (rawGmText.trim()) {
+          const currentPlayers = (playersRef.current ?? []) as PlayerLike[];
+          const freshProposals = parseHpChanges(rawGmText, currentPlayers, turnStateRef.current.who);
+          if (freshProposals.length > 0) {
+            setHpProposals(prev => [
+              ...freshProposals,
+              ...prev.filter(p => !freshProposals.some(f => f.playerId === p.playerId)),
+            ]);
+          }
+        }
         break;
       }
       case "combat_update": {
@@ -598,6 +689,65 @@ export default function Session() {
               </DialogContent>
             </Dialog>
           </div>
+
+          <AnimatePresence>
+            {hpProposals.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-3 space-y-2 overflow-hidden"
+              >
+                {hpProposals.map(proposal => {
+                  const target = players?.find(p => p.id === proposal.playerId);
+                  const curHp = target?.hp ?? 0;
+                  const maxHp = target?.maxHp ?? 100;
+                  const newHp = Math.max(0, Math.min(curHp + proposal.delta, maxHp));
+                  const isDmg = proposal.delta < 0;
+                  return (
+                    <motion.div
+                      key={proposal.id}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -8 }}
+                      className={`rounded border p-2 text-xs ${isDmg ? "border-red-700/50 bg-red-950/30" : "border-green-700/50 bg-green-950/30"}`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`font-serif font-bold ${isDmg ? "text-red-300" : "text-green-300"}`}>
+                          {isDmg ? "⚔️" : "✨"} {proposal.characterName}
+                        </span>
+                        <span className="font-mono text-muted-foreground text-[10px]">
+                          {curHp} → <span className={isDmg ? "text-red-300" : "text-green-300"}>{newHp}</span>
+                        </span>
+                      </div>
+                      <div className="text-muted-foreground mb-2">{proposal.label}</div>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => {
+                            updatePlayer.mutate({ playerId: proposal.playerId, data: { hp: newHp } }, {
+                              onSuccess: () => {
+                                refetchPlayers();
+                                setHpProposals(prev => prev.filter(p => p.id !== proposal.id));
+                              }
+                            });
+                          }}
+                          className={`flex-1 flex items-center justify-center gap-1 py-1 rounded font-mono text-[10px] transition-colors ${isDmg ? "bg-red-900/40 text-red-300 hover:bg-red-900/70" : "bg-green-900/40 text-green-300 hover:bg-green-900/70"}`}
+                        >
+                          <Check className="w-3 h-3" /> 確認
+                        </button>
+                        <button
+                          onClick={() => setHpProposals(prev => prev.filter(p => p.id !== proposal.id))}
+                          className="px-2 py-1 rounded bg-muted/20 text-muted-foreground hover:bg-muted/40 font-mono text-[10px] transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <ScrollArea className="flex-1">
             {playersLoading ? <div className="text-sm text-muted-foreground text-center">載入中...</div> :
