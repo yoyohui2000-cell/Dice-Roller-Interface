@@ -43,12 +43,95 @@ export function useRealtimeSession({ sessionId, onEvent }: UseRealtimeSessionOpt
       config: { broadcast: { self: false } },
     });
 
-    channel
-      .on("broadcast", { event: "game_event" }, ({ payload }) => {
-        onEventRef.current(payload as RealtimeEvent);
-      })
-      .subscribe();
+    // Broadcast: real-time game events (GM chunks, dice rolls, player actions, etc.)
+    channel.on("broadcast", { event: "game_event" }, ({ payload }) => {
+      onEventRef.current(payload as RealtimeEvent);
+    });
 
+    // Postgres Changes: narrative_history — new GM/player messages saved to DB
+    // Triggers for players who reconnect mid-session or join late
+    channel.on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "narrative_history",
+        filter: `session_id=eq.${sessionId}`,
+      },
+      () => {
+        // Signal that history changed so the UI can refetch
+        onEventRef.current({ type: "world_state_update" });
+      },
+    );
+
+    // Postgres Changes: players — HP updates, new players joining
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "players",
+        filter: `session_id=eq.${sessionId}`,
+      },
+      (payload) => {
+        if (payload.eventType === "INSERT") {
+          const p = payload.new as {
+            character_name: string;
+            race: string;
+            class: string;
+          };
+          onEventRef.current({
+            type: "player_joined",
+            characterName: p.character_name,
+            race: p.race,
+            class: p.class,
+          });
+        } else if (payload.eventType === "UPDATE") {
+          const p = payload.new as {
+            id: number;
+            character_name: string;
+            hp: number;
+            max_hp: number;
+          };
+          onEventRef.current({
+            type: "player_hp_update",
+            playerId: p.id,
+            characterName: p.character_name,
+            hp: p.hp,
+            maxHp: p.max_hp,
+          });
+        }
+      },
+    );
+
+    // Postgres Changes: campaign_sessions — world state and combat state updates
+    channel.on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "campaign_sessions",
+        filter: `id=eq.${sessionId}`,
+      },
+      (payload) => {
+        const updated = payload.new as {
+          world_state?: string;
+          combat_state?: CombatState;
+          phase?: string;
+        };
+        if (updated.combat_state !== undefined) {
+          onEventRef.current({
+            type: "combat_update",
+            combatState: updated.combat_state ?? null,
+          });
+        }
+        if (updated.world_state !== undefined) {
+          onEventRef.current({ type: "world_state_update" });
+        }
+      },
+    );
+
+    channel.subscribe();
     channelRef.current = channel;
 
     return () => {
