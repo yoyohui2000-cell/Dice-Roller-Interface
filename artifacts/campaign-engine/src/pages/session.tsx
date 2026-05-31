@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Send, Dices, UserPlus, Wifi, WifiOff, Clock, Users, BookOpen, Swords, Shield, Skull } from "lucide-react";
+import { ArrowLeft, Send, Dices, UserPlus, Wifi, WifiOff, Clock, Users, BookOpen, Swords, Shield, Skull, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
@@ -77,6 +77,8 @@ export default function Session() {
   const [combatState, setCombatState] = useState<CombatState>(null);
   const [sessionNpcs, setSessionNpcs] = useState<NpcData[]>([]);
   const [sidebarTab, setSidebarTab] = useState<"status" | "npcs" | "combat">("status");
+  const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const pendingDiceAutoSubmit = useRef(false);
   const handleSendRef = useRef<() => void>(() => {});
 
@@ -458,24 +460,42 @@ export default function Session() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      <header className="flex items-center justify-between px-6 py-3 border-b border-border bg-card">
-        <div className="flex items-center gap-4">
+      <header className="flex items-center justify-between px-3 sm:px-6 py-3 border-b border-border bg-card">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <Link href="/">
-            <Button variant="ghost" size="icon" className="hover:bg-primary/20"><ArrowLeft className="w-5 h-5 text-primary" /></Button>
+            <Button variant="ghost" size="icon" className="shrink-0 hover:bg-primary/20"><ArrowLeft className="w-5 h-5 text-primary" /></Button>
           </Link>
-          <h1 className="text-2xl font-serif text-primary drop-shadow-md">{session?.name}</h1>
+          <h1 className="text-base sm:text-2xl font-serif text-primary drop-shadow-md truncate">{session?.name}</h1>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {isConnected
-            ? <><Wifi className="w-4 h-4 text-green-500" /><span className="text-green-500">即時同步</span></>
-            : <><WifiOff className="w-4 h-4 text-yellow-500" /><span className="text-yellow-500">連線中...</span></>
-          }
+        <div className="flex items-center gap-1 sm:gap-2">
+          <Button variant="ghost" size="icon" className="md:hidden text-primary hover:bg-primary/20" onClick={() => { setMobileLeftOpen(v => !v); setMobileRightOpen(false); }}>
+            <Users className="w-5 h-5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="md:hidden text-primary hover:bg-primary/20" onClick={() => { setMobileRightOpen(v => !v); setMobileLeftOpen(false); }}>
+            <BookOpen className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-1 sm:gap-2 text-xs text-muted-foreground">
+            {isConnected
+              ? <><Wifi className="w-4 h-4 text-green-500" /><span className="hidden sm:inline text-green-500">即時同步</span></>
+              : <><WifiOff className="w-4 h-4 text-yellow-500" /><span className="hidden sm:inline text-yellow-500">連線中...</span></>
+            }
+          </div>
         </div>
       </header>
 
+      {(mobileLeftOpen || mobileRightOpen) && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          onClick={() => { setMobileLeftOpen(false); setMobileRightOpen(false); }}
+        />
+      )}
+
       <div className="flex flex-1 overflow-hidden">
 
-        <aside className="w-72 border-r border-border bg-sidebar p-4 flex flex-col">
+        <aside className={`fixed inset-y-0 left-0 z-50 md:relative md:inset-auto md:z-auto w-[85vw] max-w-xs md:w-72 border-r border-border bg-sidebar p-4 flex flex-col overflow-y-auto md:overflow-hidden transition-transform duration-300 ease-in-out ${mobileLeftOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
+          <div className="flex md:hidden justify-end mb-1">
+            <button onClick={() => setMobileLeftOpen(false)} className="p-1 rounded hover:bg-primary/20 text-muted-foreground"><X className="w-5 h-5" /></button>
+          </div>
           <div className="flex justify-between items-center mb-4 border-b border-border pb-2">
             <h2 className="font-serif text-xl text-primary">冒險者隊伍</h2>
             <Dialog open={playerModalOpen} onOpenChange={setPlayerModalOpen}>
@@ -547,7 +567,7 @@ export default function Session() {
 
           <div
             ref={scrollRef}
-            className="flex-1 overflow-y-auto p-8 font-serif text-lg leading-relaxed whitespace-pre-wrap relative z-10"
+            className="flex-1 overflow-y-auto p-4 sm:p-8 font-serif text-base sm:text-lg leading-relaxed whitespace-pre-wrap relative z-10"
           >
             {narrative || <span className="italic text-muted-foreground">故事尚未開始...</span>}
             {isStreaming && <span className="inline-block w-2 h-5 bg-primary animate-pulse ml-1 align-middle shadow-[0_0_8px_rgba(200,140,50,0.8)]" />}
@@ -613,7 +633,7 @@ export default function Session() {
 
                     <div className="space-y-1">
                       <div className="text-xs text-amber-400/80 font-mono tracking-wider">② 點擊擲骰</div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-3">
                         {[4, 6, 8, 10, 12, 20, 100].map(max => {
                           const diceLabel = `D${max}`;
                           if (turnState.dice !== diceLabel) return null;
@@ -680,22 +700,22 @@ export default function Session() {
                       value={action}
                       onChange={e => setAction(e.target.value)}
                       placeholder={
-                        !selectedPlayerId ? "請先選擇左側角色..." :
+                        !selectedPlayerId ? "請先選擇角色 (點擊左上角👥)..." :
                         isStreaming ? "GM 正在回應中..." :
                         !isMyTurn ? `等待 ${turnState.who} 行動中...` :
                         "描述你的行動或說話..."
                       }
-                      className="flex-1 bg-background border-primary/30 focus-visible:ring-primary text-lg py-6"
+                      className="flex-1 bg-background border-primary/30 focus-visible:ring-primary text-base sm:text-lg py-4 sm:py-6"
                       onKeyDown={e => e.key === 'Enter' && handleSend()}
                       disabled={!selectedPlayerId || isStreaming || !isMyTurn}
                     />
                     <Button
                       onClick={handleSend}
                       disabled={isStreaming || !action.trim() || !selectedPlayerId || !isMyTurn}
-                      className="h-auto px-8 text-lg font-serif"
+                      className="h-auto px-4 sm:px-8 text-base sm:text-lg font-serif"
                     >
-                      <Send className="w-5 h-5 mr-2" />
-                      行動
+                      <Send className="w-5 h-5 sm:mr-2" />
+                      <span className="hidden sm:inline">行動</span>
                     </Button>
                   </motion.div>
                 )}
@@ -704,7 +724,10 @@ export default function Session() {
           </div>
         </main>
 
-        <aside className="w-64 border-l border-border bg-sidebar p-4 flex flex-col gap-0">
+        <aside className={`fixed inset-y-0 right-0 z-50 md:relative md:inset-auto md:z-auto w-[85vw] max-w-xs md:w-64 border-l border-border bg-sidebar p-4 flex flex-col gap-0 overflow-y-auto md:overflow-hidden transition-transform duration-300 ease-in-out ${mobileRightOpen ? "translate-x-0" : "translate-x-full md:translate-x-0"}`}>
+          <div className="flex md:hidden justify-end mb-1">
+            <button onClick={() => setMobileRightOpen(false)} className="p-1 rounded hover:bg-primary/20 text-muted-foreground"><X className="w-5 h-5" /></button>
+          </div>
           <div className="flex items-center gap-1 mb-4 border-b border-border pb-2">
             <button
               onClick={() => setSidebarTab("status")}

@@ -36,19 +36,19 @@ export default function Hub() {
   };
 
   return (
-    <div className="container mx-auto p-8 max-w-5xl">
-      <div className="flex items-center justify-between mb-12 border-b border-border pb-6">
+    <div className="container mx-auto p-4 sm:p-8 max-w-5xl">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between mb-8 sm:mb-12 border-b border-border pb-6">
         <div>
-          <h1 className="text-4xl font-serif text-primary flex items-center gap-3">
-            <ScrollText className="w-10 h-10" />
+          <h1 className="text-2xl sm:text-4xl font-serif text-primary flex items-center gap-3">
+            <ScrollText className="w-7 h-7 sm:w-10 sm:h-10" />
             冒險大廳
           </h1>
-          <p className="text-muted-foreground mt-2 font-serif text-lg">古老的羊皮紙上，記載著未完的故事...</p>
+          <p className="text-muted-foreground mt-1 sm:mt-2 font-serif text-base sm:text-lg">古老的羊皮紙上，記載著未完的故事...</p>
         </div>
         
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
-            <Button className="font-serif text-lg px-6 h-12">
+            <Button className="font-serif text-base sm:text-lg px-4 sm:px-6 h-10 sm:h-12 self-start sm:self-auto">
               <Plus className="w-5 h-5 mr-2" />
               開啟新局
             </Button>
