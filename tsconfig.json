@@ -17,3 +17,10 @@
     }
   ]
 }
+{
+  "compilerOptions": {
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  }
+}
