@@ -690,6 +690,8 @@ components:
           type: integer
         ac:
           type: integer
+        level:
+          type: integer
         stats:
           type: string
 

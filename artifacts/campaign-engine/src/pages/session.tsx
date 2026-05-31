@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRealtimeSession, type RealtimeEvent, type TurnState, type CombatState } from "@/hooks/use-realtime-session";
+import CharacterSheet, { type CharacterSheetSaveData, DEFAULT_STATS } from "@/components/character-sheet";
 
 type NpcData = {
   id: number; sessionId: number; name: string; location: string;
@@ -157,8 +158,6 @@ export default function Session() {
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [editingHpId, setEditingHpId] = useState<number | null>(null);
-  const [editHpValue, setEditHpValue] = useState<number>(0);
   const [hpProposals, setHpProposals] = useState<HpProposal[]>([]);
   const streamStartPosRef = useRef<number>(0);
   const playersRef = useRef(players);
@@ -275,28 +274,23 @@ export default function Session() {
     broadcast({ type: "combat_update", combatState: null });
   };
 
-  const handleSaveHp = (playerId: number, maxHp: number) => {
-    const clamped = Math.max(0, Math.min(editHpValue, maxHp));
+  const handleSaveCharacter = useCallback((data: CharacterSheetSaveData) => {
+    if (!selectedPlayerId) return;
     const playersKey = getListSessionPlayersQueryKey(sessionId);
-    const snapshot = queryClient.getQueryData(playersKey);
     queryClient.setQueryData(playersKey, (old: typeof players) =>
-      old?.map(p => p.id === playerId ? { ...p, hp: clamped } : p) ?? []
+      old?.map(p => p.id === selectedPlayerId ? { ...p, ...data } : p) ?? []
     );
-    const target = players?.find(p => p.id === playerId);
-    updatePlayer.mutate({ playerId, data: { hp: clamped } }, {
-      onSuccess: () => {
-        refetchPlayers();
-        setEditingHpId(null);
-        if (target) {
-          broadcast({ type: "player_hp_update", playerId, characterName: target.characterName, hp: clamped, maxHp });
-        }
-      },
+    updatePlayer.mutate({
+      playerId: selectedPlayerId,
+      data: { hp: data.hp, maxHp: data.maxHp, ac: data.ac, level: data.level, stats: data.stats }
+    }, {
+      onSuccess: () => refetchPlayers(),
       onError: () => {
-        queryClient.setQueryData(playersKey, snapshot);
-        toast({ title: "HP 更新失敗", description: "無法儲存生命值變更，請重試。", variant: "destructive" });
+        refetchPlayers();
+        toast({ title: "儲存失敗", description: "角色資料儲存失敗，請重試。", variant: "destructive" });
       }
     });
-  };
+  }, [selectedPlayerId, sessionId, queryClient, players, updatePlayer, refetchPlayers, toast]);
 
   const handleShareLink = async () => {
     const url = `${window.location.origin}${window.location.pathname}?join=1`;
@@ -695,7 +689,8 @@ export default function Session() {
   };
 
   const [newPlayer, setNewPlayer] = useState({
-    name: "", characterName: "", race: "", class: "", background: "", hp: 10, maxHp: 10, ac: 10, level: 1
+    name: "", characterName: "", race: "", class: "", background: "", hp: 10, maxHp: 10, ac: 10, level: 1,
+    str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10,
   });
   const [playerModalOpen, setPlayerModalOpen] = useState(false);
 
@@ -703,7 +698,12 @@ export default function Session() {
     e.preventDefault();
     addPlayer.mutate({
       id: sessionId,
-      data: { ...newPlayer, stats: "{}" }
+      data: {
+        name: newPlayer.name, characterName: newPlayer.characterName,
+        race: newPlayer.race, class: newPlayer.class, background: newPlayer.background,
+        hp: newPlayer.hp, maxHp: newPlayer.maxHp, ac: newPlayer.ac, level: newPlayer.level,
+        stats: JSON.stringify({ ...DEFAULT_STATS, str: newPlayer.str, dex: newPlayer.dex, con: newPlayer.con, int: newPlayer.int, wis: newPlayer.wis, cha: newPlayer.cha })
+      }
     }, {
       onSuccess: (player) => {
         setPlayerModalOpen(false);
@@ -891,86 +891,33 @@ export default function Session() {
             )}
           </AnimatePresence>
 
-          <ScrollArea className="flex-1">
-            {playersLoading ? <div className="text-sm text-muted-foreground text-center">載入中...</div> :
-              players?.length === 0 ? <div className="text-sm text-muted-foreground text-center italic py-4">隊伍中還沒有人</div> :
-                <div className="space-y-4 pr-3">
-                  {players?.map(p => {
-                    const isActive = turnState.who !== "全體" && p.characterName === turnState.who;
-                    return (
-                      <div
-                        key={p.id}
-                        className={`p-3 rounded border transition-colors cursor-pointer ${selectedPlayerId === p.id ? 'bg-primary/10 border-primary' : 'bg-card border-border hover:border-primary/50'} ${isActive ? 'ring-1 ring-primary/60' : ''}`}
-                        onClick={() => setSelectedPlayerId(p.id)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="font-serif font-bold text-lg text-foreground">{p.characterName}</div>
-                          {isActive && (
-                            <span className="text-[10px] text-primary font-mono bg-primary/10 px-1.5 py-0.5 rounded border border-primary/30 animate-pulse">行動中</span>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground mb-2">{p.race} {p.class} · Lv {p.level}</div>
-                        <div>
-                          <div className="flex justify-between text-xs mb-1 font-mono items-center">
-                            <span className="text-muted-foreground">HP</span>
-                            {editingHpId === p.id ? (
-                              <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                                <button
-                                  onClick={() => setEditHpValue(v => Math.max(0, v - 1))}
-                                  className="w-5 h-5 flex items-center justify-center rounded bg-destructive/20 text-destructive hover:bg-destructive/40 font-bold leading-none"
-                                >−</button>
-                                <input
-                                  type="number"
-                                  className="w-10 bg-background border border-primary/50 rounded px-1 text-center text-primary text-xs font-mono"
-                                  value={editHpValue}
-                                  onChange={e => setEditHpValue(Math.max(0, parseInt(e.target.value) || 0))}
-                                  onKeyDown={e => {
-                                    if (e.key === "Enter") handleSaveHp(p.id, p.maxHp);
-                                    if (e.key === "Escape") setEditingHpId(null);
-                                  }}
-                                  autoFocus
-                                  min={0}
-                                  max={p.maxHp}
-                                />
-                                <button
-                                  onClick={() => setEditHpValue(v => Math.min(p.maxHp, v + 1))}
-                                  className="w-5 h-5 flex items-center justify-center rounded bg-green-900/40 text-green-400 hover:bg-green-900/70 font-bold leading-none"
-                                >+</button>
-                                <span className="text-muted-foreground">/ {p.maxHp}</span>
-                                <button onClick={() => handleSaveHp(p.id, p.maxHp)} className="text-green-400 hover:text-green-300 ml-1">
-                                  <Check className="w-3 h-3" />
-                                </button>
-                                <button onClick={() => setEditingHpId(null)} className="text-muted-foreground hover:text-foreground">
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 group/hp">
-                                <span className={p.hp <= p.maxHp * 0.2 ? "text-destructive" : "text-primary"}>{p.hp} / {p.maxHp}</span>
-                                <button
-                                  onClick={e => { e.stopPropagation(); setEditingHpId(p.id); setEditHpValue(p.hp); }}
-                                  className="opacity-0 group-hover/hp:opacity-100 focus:opacity-100 text-muted-foreground/50 hover:text-primary/70 transition-opacity"
-                                  title="GM：編輯 HP"
-                                >
-                                  <Pencil className="w-2.5 h-2.5" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                          <div className="h-1.5 bg-background rounded-full overflow-hidden border border-border">
-                            <div
-                              className={`h-full transition-all duration-500 ${p.hp / p.maxHp > 0.5 ? 'bg-green-600' : p.hp / p.maxHp > 0.2 ? 'bg-yellow-500' : 'bg-destructive'}`}
-                              style={{ width: `${(p.hp / p.maxHp) * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                        <div className="mt-2 text-xs font-mono text-muted-foreground">AC: {p.ac}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-            }
-          </ScrollArea>
+          {(players?.length ?? 0) > 1 && (
+            <div className="flex flex-wrap gap-1 mb-2 shrink-0">
+              {players?.map(p => {
+                const isActive = turnState.who !== "全體" && p.characterName === turnState.who;
+                return (
+                  <button key={p.id} onClick={() => setSelectedPlayerId(p.id)}
+                    className={`text-[10px] font-mono px-2 py-1 rounded border transition-colors ${selectedPlayerId === p.id ? "bg-primary/20 border-primary text-primary" : "border-border text-muted-foreground hover:border-primary/40"}${isActive ? " ring-1 ring-primary/50" : ""}`}>
+                    {p.characterName}{isActive ? " ▶" : ""}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex-1 min-h-0 overflow-hidden -mx-4 -mb-4">
+            {playersLoading ? (
+              <div className="text-sm text-muted-foreground text-center py-8">載入中...</div>
+            ) : players?.length === 0 ? (
+              <div className="text-sm text-muted-foreground text-center italic py-8">隊伍中還沒有人</div>
+            ) : selectedPlayer ? (
+              <CharacterSheet
+                player={selectedPlayer}
+                onSave={handleSaveCharacter}
+                isSaving={updatePlayer.isPending}
+              />
+            ) : null}
+          </div>
         </aside>
 
         <main className="flex-1 flex flex-col relative bg-[#1c1815] shadow-inner">

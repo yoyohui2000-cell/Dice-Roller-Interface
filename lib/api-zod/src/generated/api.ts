@@ -262,6 +262,7 @@ export const UpdatePlayerBody = zod.object({
   "hp": zod.number().optional(),
   "maxHp": zod.number().optional(),
   "ac": zod.number().optional(),
+  "level": zod.number().optional(),
   "stats": zod.string().optional()
 })
 
