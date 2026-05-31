@@ -1,6 +1,4 @@
 import { useEffect, useRef, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export type TurnState = { who: string; dice: string | null; purpose: string | null };
 
@@ -31,38 +29,64 @@ interface UseRealtimeSessionOptions {
   onEvent: (event: RealtimeEvent) => void;
 }
 
+function getWsUrl(sessionId: number): string {
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const host = window.location.hostname;
+  return `${proto}//${host}:8080/ws/session?sessionId=${sessionId}`;
+}
+
 export function useRealtimeSession({ sessionId, onEvent }: UseRealtimeSessionOptions) {
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
 
   useEffect(() => {
     if (!sessionId) return;
 
-    const channel = supabase.channel(`session:${sessionId}`, {
-      config: { broadcast: { self: false } },
-    });
+    let ws: WebSocket;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let destroyed = false;
 
-    channel
-      .on("broadcast", { event: "game_event" }, ({ payload }) => {
-        onEventRef.current(payload as RealtimeEvent);
-      })
-      .subscribe();
+    function connect() {
+      if (destroyed) return;
+      ws = new WebSocket(getWsUrl(sessionId));
+      wsRef.current = ws;
 
-    channelRef.current = channel;
+      ws.onmessage = (evt) => {
+        try {
+          const event = JSON.parse(evt.data) as RealtimeEvent;
+          onEventRef.current(event);
+        } catch {
+          // ignore malformed messages
+        }
+      };
+
+      ws.onclose = () => {
+        if (!destroyed) {
+          reconnectTimer = setTimeout(connect, 2000);
+        }
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+    }
+
+    connect();
 
     return () => {
-      supabase.removeChannel(channel);
-      channelRef.current = null;
+      destroyed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      wsRef.current?.close();
+      wsRef.current = null;
     };
   }, [sessionId]);
 
   const broadcast = useCallback((event: RealtimeEvent) => {
-    channelRef.current?.send({
-      type: "broadcast",
-      event: "game_event",
-      payload: event,
-    });
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(event));
+    }
   }, []);
 
   return { broadcast };
