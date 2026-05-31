@@ -168,14 +168,38 @@ export function parseTurnState(text: string): { cleanText: string; turnState: Tu
   while ((m = turnPattern.exec(workingText)) !== null) {
     lastTurnMatch = m;
   }
-  if (!lastTurnMatch) return { cleanText: workingText.trimEnd(), turnState: defaultState, combatState };
-  try {
-    const turnState = JSON.parse(lastTurnMatch[1]) as TurnState;
-    const cleanText = workingText.replace(/\n?%%TURN:\{[^%]+?\}%%[ \t]*/gs, "").trimEnd();
-    return { cleanText, turnState, combatState };
-  } catch {
-    return { cleanText: workingText.trimEnd(), turnState: defaultState, combatState };
+  const cleanText = lastTurnMatch
+    ? workingText.replace(/\n?%%TURN:\{[^%]+?\}%%[ \t]*/gs, "").trimEnd()
+    : workingText.trimEnd();
+
+  let turnState: TurnState = defaultState;
+  if (lastTurnMatch) {
+    try {
+      turnState = JSON.parse(lastTurnMatch[1]) as TurnState;
+    } catch {
+      turnState = defaultState;
+    }
   }
+
+  // Fallback: if %%TURN%% has dice:null but the narrative contains a natural-language
+  // dice request ("請擲 D20", "擲D20", etc.), extract the dice type from the text.
+  if (!turnState.dice) {
+    const diceFromText = /請擲\s*(D4|D6|D8|D10|D12|D20|D100)|擲\s*(D4|D6|D8|D10|D12|D20|D100)/i.exec(cleanText);
+    if (diceFromText) {
+      const diceType = (diceFromText[1] ?? diceFromText[2]).toUpperCase();
+      turnState = { ...turnState, dice: diceType };
+      // Try to extract purpose from "進行 <purpose>" pattern near the dice request
+      if (!turnState.purpose) {
+        const afterDice = cleanText.slice((diceFromText.index ?? 0) + diceFromText[0].length);
+        const purposeMatch = /進行\s*([^\n。，）)]{2,30})/m.exec(afterDice);
+        if (purposeMatch) {
+          turnState = { ...turnState, purpose: purposeMatch[1].trim() };
+        }
+      }
+    }
+  }
+
+  return { cleanText, turnState, combatState };
 }
 
 export function buildWorldStateEvalMessages(

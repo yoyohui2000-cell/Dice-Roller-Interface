@@ -574,7 +574,7 @@ export default function Session() {
 
             <div className="p-4">
               <AnimatePresence mode="wait">
-                {isMyTurn && turnState.dice !== null && !isStreaming ? (
+                {turnState.dice !== null && !isStreaming && !!selectedPlayerId ? (
                   /* ── DICE MODE ── */
                   <motion.div
                     key="dice-mode"
