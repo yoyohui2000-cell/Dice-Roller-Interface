@@ -490,7 +490,14 @@ export default function Session() {
   });
 
   useEffect(() => {
-    setIsConnected(true);
+    if (!sessionId) return;
+    import("@/lib/supabase").then(({ supabase }) => {
+      const channel = supabase.channel(`session:${sessionId}`);
+      channel.subscribe((status) => {
+        setIsConnected(status === "SUBSCRIBED");
+      });
+      return () => { supabase.removeChannel(channel); };
+    });
   }, [sessionId]);
 
   const handleSend = async () => {
