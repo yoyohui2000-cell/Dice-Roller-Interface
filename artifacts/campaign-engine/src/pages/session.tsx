@@ -108,6 +108,18 @@ export default function Session() {
   }, [session?.worldState]);
 
   useEffect(() => {
+    if (!isStreaming) return;
+    const watchdog = setTimeout(() => {
+      const notice = "\n\n⚠️ *GM 回應逾時，連線已重置。請重新輸入你的行動。*\n\n";
+      narrativeRef.current += notice;
+      setNarrative(narrativeRef.current);
+      setIsStreaming(false);
+      setTurnState({ who: "全體", dice: null, purpose: null });
+    }, 30_000);
+    return () => clearTimeout(watchdog);
+  }, [isStreaming]);
+
+  useEffect(() => {
     if (history && !narrativeRef.current && !isStreaming) {
       const formatted = history.map(entry => {
         if (entry.role === "assistant") return `[GM] ${entry.content}`;
