@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import {
   useGetCampaignSession,
   getGetCampaignSessionQueryKey,
@@ -164,6 +166,8 @@ export default function Session() {
   useEffect(() => { playersRef.current = players; }, [players]);
   useEffect(() => { turnStateRef.current = turnState; }, [turnState]);
   const updatePlayer = useUpdatePlayer();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const [initiativeOpen, setInitiativeOpen] = useState(false);
   const [playerInits, setPlayerInits] = useState<Record<number, number>>({});
@@ -273,10 +277,23 @@ export default function Session() {
 
   const handleSaveHp = (playerId: number, maxHp: number) => {
     const clamped = Math.max(0, Math.min(editHpValue, maxHp));
+    const playersKey = getListSessionPlayersQueryKey(sessionId);
+    const snapshot = queryClient.getQueryData(playersKey);
+    queryClient.setQueryData(playersKey, (old: typeof players) =>
+      old?.map(p => p.id === playerId ? { ...p, hp: clamped } : p) ?? []
+    );
+    const target = players?.find(p => p.id === playerId);
     updatePlayer.mutate({ playerId, data: { hp: clamped } }, {
       onSuccess: () => {
         refetchPlayers();
         setEditingHpId(null);
+        if (target) {
+          broadcast({ type: "player_hp_update", playerId, characterName: target.characterName, hp: clamped, maxHp });
+        }
+      },
+      onError: () => {
+        queryClient.setQueryData(playersKey, snapshot);
+        toast({ title: "HP 更新失敗", description: "無法儲存生命值變更，請重試。", variant: "destructive" });
       }
     });
   };
@@ -829,10 +846,20 @@ export default function Session() {
                       <div className="flex gap-1.5">
                         <button
                           onClick={() => {
+                            const playersKey = getListSessionPlayersQueryKey(sessionId);
+                            const snapshot = queryClient.getQueryData(playersKey);
+                            queryClient.setQueryData(playersKey, (old: typeof players) =>
+                              old?.map(p => p.id === proposal.playerId ? { ...p, hp: newHp } : p) ?? []
+                            );
                             updatePlayer.mutate({ playerId: proposal.playerId, data: { hp: newHp } }, {
                               onSuccess: () => {
                                 refetchPlayers();
                                 setHpProposals(prev => prev.filter(p => p.id !== proposal.id));
+                                broadcast({ type: "player_hp_update", playerId: proposal.playerId, characterName: proposal.characterName, hp: newHp, maxHp: target?.maxHp ?? 0 });
+                              },
+                              onError: () => {
+                                queryClient.setQueryData(playersKey, snapshot);
+                                toast({ title: "HP 更新失敗", description: "無法套用傷害/治療，請重試。", variant: "destructive" });
                               }
                             });
                           }}
