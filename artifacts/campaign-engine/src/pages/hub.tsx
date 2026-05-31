@@ -4,7 +4,7 @@ import { useListCampaignSessions, useCreateCampaignSession } from "@workspace/ap
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, ScrollText, LogOut, User } from "lucide-react";
+import { Plus, ScrollText, LogOut, User, BookUser } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,6 +55,12 @@ export default function Hub() {
               <span className="max-w-[160px] truncate">{user.email}</span>
             </div>
           )}
+          <Link href="/profile">
+            <Button variant="outline" size="sm" className="text-muted-foreground hover:text-foreground">
+              <BookUser className="w-4 h-4 mr-1.5" />
+              我的角色
+            </Button>
+          </Link>
           <Button
             variant="outline"
             size="sm"

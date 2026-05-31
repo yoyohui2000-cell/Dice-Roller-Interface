@@ -115,6 +115,37 @@ router.get("/campaign/sessions/:id/players", async (req, res): Promise<void> => 
   res.json(sessionPlayers.map(p => ({ ...p, createdAt: p.createdAt.toISOString() })));
 });
 
+router.get("/campaign/my-characters", async (req, res): Promise<void> => {
+  const userId = req.query.userId as string | undefined;
+  if (!userId) {
+    res.status(400).json({ error: "userId query param required" });
+    return;
+  }
+  const chars = await db
+    .select({
+      id: players.id,
+      characterName: players.characterName,
+      name: players.name,
+      race: players.race,
+      class: players.class,
+      background: players.background,
+      hp: players.hp,
+      maxHp: players.maxHp,
+      ac: players.ac,
+      level: players.level,
+      stats: players.stats,
+      createdAt: players.createdAt,
+      sessionId: campaignSessions.id,
+      sessionName: campaignSessions.name,
+      sessionPhase: campaignSessions.phase,
+    })
+    .from(players)
+    .innerJoin(campaignSessions, eq(players.sessionId, campaignSessions.id))
+    .where(eq(players.userId, userId))
+    .orderBy(players.createdAt);
+  res.json(chars.map(c => ({ ...c, createdAt: c.createdAt.toISOString() })));
+});
+
 router.get("/campaign/sessions/:id/players/me", async (req, res): Promise<void> => {
   const params = ListSessionPlayersParams.safeParse(req.params);
   if (!params.success) {

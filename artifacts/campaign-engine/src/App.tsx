@@ -11,6 +11,7 @@ import { AuthContext, useAuthProvider } from "@/hooks/use-auth";
 
 const Hub = lazy(() => import("@/pages/hub"));
 const Session = lazy(() => import("@/pages/session"));
+const Profile = lazy(() => import("@/pages/profile"));
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ function Router() {
           <Switch>
             <Route path="/" component={Hub} />
             <Route path="/session/:id" component={Session} />
+            <Route path="/profile" component={Profile} />
             <Route component={NotFound} />
           </Switch>
         </Suspense>
