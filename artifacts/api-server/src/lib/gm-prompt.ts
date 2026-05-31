@@ -340,7 +340,7 @@ export function buildNpcContext(
 
 export function buildChatHistory(
   narrativeEntries: Array<{ role: string; content: string }>,
-  players: Array<{ name: string; characterName: string; race: string; class: string; hp: number; maxHp: number; ac: number; level: number }>,
+  players: Array<{ name: string; characterName: string; race: string; class: string; hp: number; maxHp: number; ac: number; level: number; avatarDescription?: string | null }>,
   npcContext: string,
   diceRoll?: { diceType: string; result: number; purpose: string; playerName: string } | null,
   playerAction?: string,
@@ -348,7 +348,10 @@ export function buildChatHistory(
   const history: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
 
   const playerSummary = players
-    .map(p => `${p.name}（角色：${p.characterName} | ${p.race} ${p.class} Lv.${p.level} | HP: ${p.hp}/${p.maxHp} | AC: ${p.ac}）`)
+    .map(p => {
+      const base = `${p.name}（角色：${p.characterName} | ${p.race} ${p.class} Lv.${p.level} | HP: ${p.hp}/${p.maxHp} | AC: ${p.ac}）`;
+      return p.avatarDescription ? `${base}\n  外貌與個性：${p.avatarDescription}` : base;
+    })
     .join("\n");
 
   history.push({
