@@ -1,6 +1,11 @@
 {
   "extends": "./tsconfig.base.json",
   "compileOnSave": false,
+  "compilerOptions": {
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  },
   "files": [],
   "references": [
     {
@@ -16,11 +21,4 @@
       "path": "./lib/integrations-gemini-ai"
     }
   ]
-}
-{
-  "compilerOptions": {
-    "noImplicitAny": false,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
-  }
 }
