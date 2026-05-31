@@ -1,6 +1,4 @@
 import { useEffect, useRef, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export type TurnState = { who: string; dice: string | null; purpose: string | null };
 
@@ -32,8 +30,14 @@ interface UseRealtimeSessionOptions {
   onStatusChange?: (connected: boolean) => void;
 }
 
+function getWsUrl(sessionId: number): string {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const host = window.location.host;
+  return `${protocol}//${host}/ws/session?sessionId=${sessionId}`;
+}
+
 export function useRealtimeSession({ sessionId, onEvent, onStatusChange }: UseRealtimeSessionOptions) {
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const onEventRef = useRef(onEvent);
   const onStatusChangeRef = useRef(onStatusChange);
   onEventRef.current = onEvent;
@@ -42,113 +46,53 @@ export function useRealtimeSession({ sessionId, onEvent, onStatusChange }: UseRe
   useEffect(() => {
     if (!sessionId) return;
 
-    const channel = supabase.channel(`session:${sessionId}`, {
-      config: { broadcast: { self: false } },
-    });
+    let ws: WebSocket;
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
+    let stopped = false;
 
-    // Broadcast: real-time game events (GM chunks, dice rolls, player actions, etc.)
-    channel.on("broadcast", { event: "game_event" }, ({ payload }) => {
-      onEventRef.current(payload as RealtimeEvent);
-    });
+    const connect = () => {
+      ws = new WebSocket(getWsUrl(sessionId));
+      wsRef.current = ws;
 
-    // Postgres Changes: narrative_history — new GM/player messages saved to DB
-    channel.on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "narrative_history",
-        filter: `session_id=eq.${sessionId}`,
-      },
-      () => {
-        onEventRef.current({ type: "world_state_update" });
-      },
-    );
+      ws.onopen = () => {
+        onStatusChangeRef.current?.(true);
+      };
 
-    // Postgres Changes: players — HP updates, new players joining
-    channel.on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "players",
-        filter: `session_id=eq.${sessionId}`,
-      },
-      (payload) => {
-        if (payload.eventType === "INSERT") {
-          const p = payload.new as {
-            character_name: string;
-            race: string;
-            class: string;
-          };
-          onEventRef.current({
-            type: "player_joined",
-            characterName: p.character_name,
-            race: p.race,
-            class: p.class,
-          });
-        } else if (payload.eventType === "UPDATE") {
-          const p = payload.new as {
-            id: number;
-            character_name: string;
-            hp: number;
-            max_hp: number;
-          };
-          onEventRef.current({
-            type: "player_hp_update",
-            playerId: p.id,
-            characterName: p.character_name,
-            hp: p.hp,
-            maxHp: p.max_hp,
-          });
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data as string) as RealtimeEvent;
+          onEventRef.current(data);
+        } catch {
         }
-      },
-    );
+      };
 
-    // Postgres Changes: campaign_sessions — world state and combat state updates
-    channel.on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "campaign_sessions",
-        filter: `id=eq.${sessionId}`,
-      },
-      (payload) => {
-        const updated = payload.new as {
-          world_state?: string;
-          combat_state?: CombatState;
-          phase?: string;
-        };
-        if (updated.combat_state !== undefined) {
-          onEventRef.current({
-            type: "combat_update",
-            combatState: updated.combat_state ?? null,
-          });
+      ws.onclose = () => {
+        onStatusChangeRef.current?.(false);
+        if (!stopped) {
+          reconnectTimeout = setTimeout(connect, 3000);
         }
-        if (updated.world_state !== undefined) {
-          onEventRef.current({ type: "world_state_update" });
-        }
-      },
-    );
+      };
 
-    channel.subscribe((status) => {
-      onStatusChangeRef.current?.(status === "SUBSCRIBED");
-    });
-    channelRef.current = channel;
+      ws.onerror = () => {
+        ws.close();
+      };
+    };
+
+    connect();
 
     return () => {
-      supabase.removeChannel(channel);
-      channelRef.current = null;
+      stopped = true;
+      clearTimeout(reconnectTimeout);
+      ws?.close();
+      wsRef.current = null;
     };
   }, [sessionId]);
 
   const broadcast = useCallback((event: RealtimeEvent) => {
-    channelRef.current?.send({
-      type: "broadcast",
-      event: "game_event",
-      payload: event,
-    });
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(event));
+    }
   }, []);
 
   return { broadcast };

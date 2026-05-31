@@ -52,7 +52,7 @@ export default function Hub() {
           {user && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground border border-border rounded-lg px-3 py-1.5 bg-card">
               <User className="w-3.5 h-3.5" />
-              <span className="max-w-[160px] truncate">{user.email}</span>
+              <span className="max-w-[160px] truncate">{user.name}</span>
             </div>
           )}
           <Link href="/profile">

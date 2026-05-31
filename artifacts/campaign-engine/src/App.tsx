@@ -6,7 +6,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/error-boundary";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth";
-import ResetPasswordPage from "@/pages/reset-password";
 import { AuthContext, useAuthProvider } from "@/hooks/use-auth";
 
 const Hub = lazy(() => import("@/pages/hub"));
@@ -47,16 +46,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     return (
       <div className="dark min-h-screen bg-background flex items-center justify-center">
         <div className="font-serif text-primary text-xl animate-pulse">召喚冒險者...</div>
-      </div>
-    );
-  }
-
-  if (auth.isRecovery) {
-    return (
-      <div className="dark min-h-screen bg-background text-foreground font-sans">
-        <AuthContext.Provider value={auth}>
-          <ResetPasswordPage />
-        </AuthContext.Provider>
       </div>
     );
   }
