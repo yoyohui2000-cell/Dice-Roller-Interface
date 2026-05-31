@@ -445,6 +445,7 @@ export default function Session() {
         narrativeRef.current = narrativeRef.current
           .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
           .replace(/\n?%%TURN:\{[^%]*\}%%\s*$/, "")
+          .replace(/\n?%%PLAYER_UPDATE:\{[^%]*\}%%[ \t]*/g, "")
           .trimEnd() + "\n\n";
         setNarrative(narrativeRef.current);
         setIsStreaming(false);
@@ -600,6 +601,7 @@ export default function Session() {
               narrativeRef.current = narrativeRef.current
                 .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
                 .replace(/\n?%%TURN:\{[^%]+?\}%%[ \t]*/gs, "")
+                .replace(/\n?%%PLAYER_UPDATE:\{[^%]*\}%%[ \t]*/g, "")
                 .trimEnd() + "\n\n";
               setNarrative(narrativeRef.current);
               setIsStreaming(false);
@@ -612,6 +614,19 @@ export default function Session() {
                 setCombatState(newCombatState);
                 if (newCombatState !== null) setSidebarTab("combat");
                 broadcast({ type: "combat_update", combatState: newCombatState });
+              }
+
+              // Apply GM-driven player stat updates immediately to the cache
+              if (Array.isArray(data.playerUpdates) && data.playerUpdates.length > 0) {
+                const updates = data.playerUpdates as Array<{ id: number; characterName: string; hp: number; maxHp: number; ac: number; level: number; stats: string }>;
+                const playersKey = getListSessionPlayersQueryKey(sessionId);
+                queryClient.setQueryData(playersKey, (old: typeof players) =>
+                  old?.map(p => {
+                    const upd = updates.find(u => u.id === p.id);
+                    return upd ? { ...p, hp: upd.hp, maxHp: upd.maxHp, ac: upd.ac, level: upd.level, stats: upd.stats } : p;
+                  }) ?? []
+                );
+                broadcast({ type: "player_hp_update" });
               }
 
               broadcast({ type: "gm_done", turnState: newTurnState, combatState: data.combatState as CombatState | undefined });

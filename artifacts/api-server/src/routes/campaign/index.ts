@@ -28,7 +28,9 @@ import {
   buildNpcContext,
   parseTurnState,
   type CombatState,
+  type PlayerUpdate,
 } from "../../lib/gm-prompt";
+import { parseStats, type CharacterStats } from "../../lib/character-stats";
 
 const router: IRouter = Router();
 
@@ -248,7 +250,7 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
       }
     }
 
-    const { cleanText, turnState, combatState } = parseTurnState(fullResponse);
+    const { cleanText, turnState, combatState, playerUpdates } = parseTurnState(fullResponse);
 
     await db.insert(narrativeHistory).values({
       sessionId: params.data.id,
@@ -263,7 +265,83 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
         .where(eq(campaignSessions.id, params.data.id));
     }
 
-    res.write(`data: ${JSON.stringify({ done: true, turnState, combatState: combatState !== undefined ? combatState : undefined })}\n\n`);
+    // Apply GM-driven player stat updates to the DB
+    const appliedUpdates: Array<{ id: number; characterName: string; hp: number; maxHp: number; ac: number; level: number; stats: string }> = [];
+    if (playerUpdates.length > 0) {
+      for (const update of playerUpdates) {
+        const target = sessionPlayers.find(
+          p => p.characterName === update.name ||
+               p.characterName.includes(update.name) ||
+               update.name.includes(p.characterName)
+        );
+        if (!target) continue;
+        try {
+          const stats = parseStats(target.stats ?? "{}");
+
+          // Apply conditions
+          if (update.conditionsAdd.length > 0) {
+            const toAdd = update.conditionsAdd.filter(c => !stats.conditions.includes(c));
+            stats.conditions = [...stats.conditions, ...toAdd];
+          }
+          if (update.conditionsRemove.length > 0) {
+            const removeSet = new Set(update.conditionsRemove);
+            stats.conditions = stats.conditions.filter(c => !removeSet.has(c));
+          }
+
+          // Apply inventory changes
+          if (update.inventoryAdd.length > 0) {
+            for (const item of update.inventoryAdd) {
+              const existing = stats.inventory.find(i => i.name === item.name);
+              if (existing) {
+                existing.qty += item.qty;
+              } else {
+                stats.inventory.push({ id: Date.now() + Math.random(), name: item.name, qty: item.qty });
+              }
+            }
+          }
+          if (update.inventoryRemove.length > 0) {
+            const removeNames = new Set(update.inventoryRemove);
+            stats.inventory = stats.inventory.filter(i => !removeNames.has(i.name));
+          }
+
+          // Apply spell slot usage
+          if (update.spellSlotsUse.length > 0) {
+            for (const use of update.spellSlotsUse) {
+              const slot = stats.spellSlots.find(s => s.level === use.level);
+              if (slot) {
+                slot.current = Math.max(0, slot.current - use.count);
+              }
+            }
+          }
+
+          // Apply HP change
+          let newHp = target.hp;
+          if (update.hpChange !== null) {
+            newHp = Math.max(0, Math.min(target.maxHp, target.hp + update.hpChange));
+          }
+
+          const [updated] = await db.update(players)
+            .set({ hp: newHp, stats: JSON.stringify(stats) })
+            .where(eq(players.id, target.id))
+            .returning();
+          if (updated) {
+            appliedUpdates.push({
+              id: updated.id,
+              characterName: updated.characterName,
+              hp: updated.hp,
+              maxHp: updated.maxHp,
+              ac: updated.ac,
+              level: updated.level,
+              stats: updated.stats,
+            });
+          }
+        } catch (err) {
+          logger.warn({ err, update }, "Failed to apply player update");
+        }
+      }
+    }
+
+    res.write(`data: ${JSON.stringify({ done: true, turnState, combatState: combatState !== undefined ? combatState : undefined, playerUpdates: appliedUpdates.length > 0 ? appliedUpdates : undefined })}\n\n`);
     res.end();
 
     // Background: world state evaluation + NPC extraction — never blocks players
