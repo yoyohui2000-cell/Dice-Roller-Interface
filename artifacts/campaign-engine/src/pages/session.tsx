@@ -29,6 +29,7 @@ import { usePresence } from "@/hooks/use-presence";
 import CharacterSheet, { type CharacterSheetSaveData, type GmChange } from "@/components/character-sheet";
 import { EditCharacterDialog } from "@/components/edit-character-dialog";
 import CharacterCreationDialog, { type CharacterCreationData } from "@/components/character-creation-dialog";
+import PartyStatsPanel from "@/components/party-stats-panel";
 
 type NpcData = {
   id: number; sessionId: number; name: string; location: string;
@@ -176,7 +177,7 @@ export default function Session() {
   const [turnState, setTurnState] = useState<TurnState>({ who: "全體", dice: null, purpose: null });
   const [combatState, setCombatState] = useState<CombatState>(null);
   const [sessionNpcs, setSessionNpcs] = useState<NpcData[]>([]);
-  const [sidebarTab, setSidebarTab] = useState<"status" | "npcs" | "combat">("status");
+  const [sidebarTab, setSidebarTab] = useState<"status" | "npcs" | "combat" | "party">("status");
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -1072,7 +1073,7 @@ export default function Session() {
                     <span className="text-xs text-muted-foreground font-serif truncate">{selectedPlayer.characterName}</span>
                     <EditCharacterDialog
                       player={selectedPlayer}
-                      invalidateKeys={[getListSessionPlayersQueryKey(sessionId)]}
+                      invalidateKeys={[[...getListSessionPlayersQueryKey(sessionId)]]}
                       triggerClassName="h-6 w-6 text-muted-foreground/50 hover:text-primary"
                     />
                   </div>
@@ -1279,6 +1280,18 @@ export default function Session() {
               狀態
             </button>
             <button
+              onClick={() => setSidebarTab("party")}
+              className={`flex items-center gap-1 flex-1 justify-center py-1 rounded text-sm font-serif transition-colors relative ${sidebarTab === "party" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              隊伍
+              {(players?.length ?? 0) > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary/70 text-primary-foreground rounded-full text-[9px] flex items-center justify-center font-mono">
+                  {players?.length}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => { setSidebarTab("npcs"); fetchNpcs(); }}
               className={`flex items-center gap-1 flex-1 justify-center py-1 rounded text-sm font-serif transition-colors relative ${sidebarTab === "npcs" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
             >
@@ -1361,6 +1374,10 @@ export default function Session() {
                 </ScrollArea>
               </div>
             </>
+          )}
+
+          {sidebarTab === "party" && (
+            <PartyStatsPanel players={players ?? []} />
           )}
 
           {sidebarTab === "npcs" && (
