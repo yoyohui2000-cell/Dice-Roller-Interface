@@ -380,12 +380,19 @@ export default function Session() {
     if (turnState.dice !== null && turnState.purpose) {
       setRollPurpose(turnState.purpose);
     }
+    // A new dice request arrived (or was cleared) — reset all roll state so
+    // stale results from the previous roll can never trigger an accidental
+    // auto-submit for the new request.
+    setRollingDice(null);
+    setRollResult(null);
+    setActiveRollId(null);
     pendingDiceAutoSubmit.current = false;
   }, [turnState.dice, turnState.who]);
 
   useEffect(() => {
     if (
       turnState.dice !== null &&
+      rollingDice !== null &&          // player has actually rolled for THIS request
       activeRollId !== null &&
       rollResult !== null &&
       !isStreaming &&
@@ -396,7 +403,7 @@ export default function Session() {
       return () => clearTimeout(t);
     }
     return undefined;
-  }, [activeRollId, rollResult, isStreaming, turnState.dice]);
+  }, [activeRollId, rollResult, isStreaming, turnState.dice, rollingDice]);
 
   const fetchNpcs = useCallback(async () => {
     if (!sessionId) return;
@@ -522,6 +529,9 @@ export default function Session() {
     if (isStreaming || !selectedPlayerId) return;
     if (!isDiceMode && !action.trim()) return;
     if (!isDiceMode && !isMyTurn) return;
+
+    // Reset the auto-submit guard immediately so it can never double-fire
+    pendingDiceAutoSubmit.current = false;
 
     const currentPlayer = players?.find(p => p.id === selectedPlayerId);
     const pName = currentPlayer?.characterName || "玩家";
