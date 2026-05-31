@@ -18,6 +18,7 @@ export type CharacterStats = {
   relationships: Array<{ name: string; attitude: string }>;
   storyFlags: Array<{ label: string; done: boolean }>;
   alignmentTrack: { good: number; evil: number; lawful: number; chaotic: number };
+  deathSaves: { successes: number; failures: number };
 };
 
 const DEFAULT_STATS: CharacterStats = {
@@ -28,6 +29,7 @@ const DEFAULT_STATS: CharacterStats = {
   equippedSlots: {}, inventory: [], questItems: [],
   reputation: [], relationships: [], storyFlags: [],
   alignmentTrack: { good: 50, evil: 50, lawful: 50, chaotic: 50 },
+  deathSaves: { successes: 0, failures: 0 },
 };
 
 export function parseStats(statsStr: string): CharacterStats {

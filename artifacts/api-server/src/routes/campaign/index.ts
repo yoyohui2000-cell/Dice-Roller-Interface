@@ -314,11 +314,29 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
             }
           }
 
+          // Apply death saves
+          const ds = stats.deathSaves ?? { successes: 0, failures: 0 };
+          if (update.stabilize) {
+            // Stabilized — reset death saves
+            stats.deathSaves = { successes: 0, failures: 0 };
+          } else {
+            if (update.deathSaveSuccess !== null) {
+              ds.successes = Math.min(3, ds.successes + update.deathSaveSuccess);
+              stats.deathSaves = ds;
+            }
+            if (update.deathSaveFailure !== null) {
+              ds.failures = Math.min(3, ds.failures + update.deathSaveFailure);
+              stats.deathSaves = ds;
+            }
+          }
+
           // Apply HP change
           let newHp = target.hp;
           if (update.hpChange !== null) {
             newHp = Math.max(0, Math.min(target.maxHp, target.hp + update.hpChange));
           }
+          // Stabilize: ensure HP at least 1
+          if (update.stabilize && newHp === 0) newHp = 1;
 
           const [updated] = await db.update(players)
             .set({ hp: newHp, stats: JSON.stringify(stats) })

@@ -50,6 +50,7 @@ export type CharacterStats = {
   relationships: Array<{ name: string; attitude: string }>;
   storyFlags: Array<{ label: string; done: boolean }>;
   alignmentTrack: { good: number; evil: number; lawful: number; chaotic: number };
+  deathSaves: { successes: number; failures: number };
 };
 
 export const DEFAULT_STATS: CharacterStats = {
@@ -60,6 +61,7 @@ export const DEFAULT_STATS: CharacterStats = {
   equippedSlots: {}, inventory: [], questItems: [],
   reputation: [], relationships: [], storyFlags: [],
   alignmentTrack: { good: 50, evil: 50, lawful: 50, chaotic: 50 },
+  deathSaves: { successes: 0, failures: 0 },
 };
 
 export type PlayerCoreFields = {
@@ -373,6 +375,96 @@ export default function CharacterSheet({ player, onSave, isSaving, gmChange }: C
             <span className="text-[9px] text-muted-foreground">臨時HP</span>
             <InlineNumEdit value={stats.tempHp} onChange={v => updStats({ tempHp: Math.max(0, v) })} className="text-xs text-blue-400" />
           </div>
+
+          {/* ── Death Saving Throws ── shown when HP = 0 */}
+          <AnimatePresence>
+            {hp === 0 && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 rounded-lg border border-red-800/60 bg-red-950/30 p-2.5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-red-400 font-bold">死亡豁免</span>
+                    <button
+                      onClick={() => updStats({ deathSaves: { successes: 0, failures: 0 } })}
+                      className="text-[9px] text-muted-foreground hover:text-foreground font-mono underline"
+                    >
+                      重置
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    {/* Successes */}
+                    <div className="flex-1">
+                      <div className="text-[9px] text-green-500 font-mono mb-1">成功</div>
+                      <div className="flex gap-1.5">
+                        {[0, 1, 2].map(i => {
+                          const filled = i < (stats.deathSaves?.successes ?? 0);
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => {
+                                const cur = stats.deathSaves?.successes ?? 0;
+                                updStats({ deathSaves: { successes: cur > i ? i : Math.min(3, i + 1), failures: stats.deathSaves?.failures ?? 0 } });
+                              }}
+                              className={cn(
+                                "w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center",
+                                filled
+                                  ? "border-green-500 bg-green-500/30"
+                                  : "border-green-800/50 bg-transparent hover:border-green-600"
+                              )}
+                            >
+                              {filled && <Check className="w-3 h-3 text-green-400" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {/* Status indicator */}
+                    <div className="text-center px-1">
+                      {(stats.deathSaves?.successes ?? 0) >= 3 && (
+                        <span className="text-[9px] text-green-400 font-serif">穩定！</span>
+                      )}
+                      {(stats.deathSaves?.failures ?? 0) >= 3 && (
+                        <span className="text-[9px] text-red-400 font-serif">死亡…</span>
+                      )}
+                      {(stats.deathSaves?.successes ?? 0) < 3 && (stats.deathSaves?.failures ?? 0) < 3 && (
+                        <span className="text-[9px] text-muted-foreground font-serif">瀕死</span>
+                      )}
+                    </div>
+                    {/* Failures */}
+                    <div className="flex-1 flex flex-col items-end">
+                      <div className="text-[9px] text-red-500 font-mono mb-1">失敗</div>
+                      <div className="flex gap-1.5">
+                        {[0, 1, 2].map(i => {
+                          const filled = i < (stats.deathSaves?.failures ?? 0);
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => {
+                                const cur = stats.deathSaves?.failures ?? 0;
+                                updStats({ deathSaves: { successes: stats.deathSaves?.successes ?? 0, failures: cur > i ? i : Math.min(3, i + 1) } });
+                              }}
+                              className={cn(
+                                "w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center",
+                                filled
+                                  ? "border-red-500 bg-red-500/30"
+                                  : "border-red-800/50 bg-transparent hover:border-red-600"
+                              )}
+                            >
+                              {filled && <X className="w-3 h-3 text-red-400" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="grid grid-cols-4 gap-1">
