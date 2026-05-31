@@ -3,10 +3,11 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import pinoHttp from 'pino-http'
 
-const app: Express = express();
+const httpLogger = pinoHttp.default ?? pinoHttp
 
-app.use(
+app.use(httpLogger())
   pinoHttp({
     logger,
     serializers: {
