@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRealtimeSession, type RealtimeEvent, type TurnState, type CombatState } from "@/hooks/use-realtime-session";
+import { usePresence } from "@/hooks/use-presence";
 import CharacterSheet, { type CharacterSheetSaveData, DEFAULT_STATS } from "@/components/character-sheet";
 
 type NpcData = {
@@ -312,6 +313,12 @@ export default function Session() {
 
   const selectedPlayer = players?.find(p => p.id === selectedPlayerId);
   const isMyTurn = turnState.who === "全體" || selectedPlayer?.characterName === turnState.who;
+
+  const { onlineUsers } = usePresence({
+    sessionId,
+    characterName: selectedPlayer?.characterName,
+    playerId: selectedPlayer?.id,
+  });
 
   useEffect(() => {
     if (players && players.length > 0 && !selectedPlayerId) {
@@ -767,6 +774,36 @@ export default function Session() {
               </motion.span>
             )}
           </AnimatePresence>
+          {onlineUsers.length > 0 && (
+            <div
+              className="hidden sm:flex items-center gap-1.5"
+              title={onlineUsers.map(u => u.characterName).join("、") + " 在線中"}
+            >
+              <div className="flex -space-x-1.5">
+                {onlineUsers.slice(0, 3).map((u) => (
+                  <div
+                    key={u.playerId}
+                    title={u.characterName}
+                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[9px] font-bold font-mono uppercase select-none ${
+                      u.playerId === selectedPlayer?.id
+                        ? "border-green-500 bg-green-900/60 text-green-300"
+                        : "border-primary/40 bg-primary/20 text-primary"
+                    }`}
+                  >
+                    {u.characterName.charAt(0)}
+                  </div>
+                ))}
+                {onlineUsers.length > 3 && (
+                  <div className="w-6 h-6 rounded-full border-2 border-border bg-muted flex items-center justify-center text-[9px] font-mono text-muted-foreground select-none">
+                    +{onlineUsers.length - 3}
+                  </div>
+                )}
+              </div>
+              <span className="text-[11px] text-muted-foreground font-mono tabular-nums">
+                {onlineUsers.length} 在線
+              </span>
+            </div>
+          )}
           <div className="flex items-center gap-1 sm:gap-2 text-xs text-muted-foreground">
             {isConnected
               ? <><Wifi className="w-4 h-4 text-green-500" /><span className="hidden sm:inline text-green-500">即時同步</span></>
