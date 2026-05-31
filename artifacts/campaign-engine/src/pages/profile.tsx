@@ -186,7 +186,7 @@ export default function ProfilePage() {
     },
   });
 
-  const initials = (user?.name ?? "?").slice(0, 2).toUpperCase();
+  const initials = (user?.email ?? "?").slice(0, 2).toUpperCase();
 
   return (
     <div className="container mx-auto p-4 sm:p-8 max-w-5xl">
@@ -208,7 +208,7 @@ export default function ProfilePage() {
                 <User className="w-5 h-5" />
                 我的角色
               </h1>
-              <p className="text-sm text-muted-foreground mt-0.5 truncate max-w-[220px]">{user?.name}</p>
+              <p className="text-sm text-muted-foreground mt-0.5 truncate max-w-[220px]">{user?.email}</p>
             </div>
           </div>
         </div>
