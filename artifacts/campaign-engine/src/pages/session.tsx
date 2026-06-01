@@ -462,8 +462,6 @@ const buildNarrativeFromHistory = useCallback(() => {
   }).join("\n\n");
 
   const next = formatted ? formatted + "\n\n" : "";
-  narrativeRef.current = next;
-  setHistoryNarrative(next);
 }, [history, players]);
 
 useEffect(() => {
