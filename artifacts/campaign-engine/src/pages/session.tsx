@@ -625,15 +625,9 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
           try {
             const data = JSON.parse(line.slice(6));
             if (data.content) {
-              narrativeRef.current += data.content;
               resetWatchdog();
             }
             if (data.done) {
-              narrativeRef.current = narrativeRef.current
-                .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
-                .replace(/\n?%%TURN:\{[^%]+?\}%%[ \t]*/gs, "")
-                .replace(/\n?%%PLAYER_UPDATE:\{[^%]*\}%%[ \t]*/g, "")
-                .trimEnd() + "\n\n";
               clearWatchdog();
               setIsStreaming(false);
 
