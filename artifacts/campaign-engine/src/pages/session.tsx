@@ -284,7 +284,7 @@ export default function Session() {
           status: null,
         })),
       ];
-      const BASE = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+      const BASE = (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, "");
       const resp = await fetch(`${BASE}/api/campaign/sessions/${sessionId}/initiative`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -304,7 +304,7 @@ export default function Session() {
   };
 
   const handleNextTurn = async () => {
-    const BASE = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+    const BASE = (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, "");
     const resp = await fetch(`${BASE}/api/campaign/sessions/${sessionId}/initiative/next`, { method: "POST" });
     if (!resp.ok) return;
     const data = await resp.json() as { combatState: CombatState };
@@ -313,7 +313,7 @@ export default function Session() {
   };
 
   const handleEndCombat = async () => {
-    const BASE = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+    const BASE = (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, "");
     await fetch(`${BASE}/api/campaign/sessions/${sessionId}/initiative`, { method: "DELETE" });
     setCombatState(null);
     setSidebarTab("status");
@@ -447,7 +447,7 @@ export default function Session() {
   const fetchNpcs = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const BASE = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+      const BASE = (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, "");
       const res = await fetch(`${BASE}/api/campaign/sessions/${sessionId}/npcs`);
       if (res.ok) {
         const data = await res.json() as NpcData[];
@@ -610,7 +610,7 @@ export default function Session() {
 
     isLocalStreamingRef.current = true;
     try {
-      const BASE = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+      const BASE = (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, "");
       const res = await fetch(`${BASE}/api/campaign/sessions/${sessionId}/gm-message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
