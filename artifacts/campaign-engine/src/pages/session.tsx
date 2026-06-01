@@ -469,17 +469,24 @@ useEffect(() => {
 }, [buildNarrativeFromHistory, sessionId]);
   
 const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
-  console.log("[session event]", event);
+  try {
+    console.log("[session event]", event);
 
-  switch (event.type) {
-    case "player_action": {
-      narrativeRef.current += line;
-setNarrative(narrativeRef.current);
-      refetchHistory();
-      setIsStreaming(true);
-      resetWatchdog();
-      break;
-    }
+    switch (event.type) {
+case "player_action": {
+  const line =
+    `【${event.characterName}】 ${event.action}` +
+    (event.rollInfo ? ` (${event.rollInfo})` : "") +
+    "\n\n[GM] ";
+
+  narrativeRef.current += line;
+  setNarrative(narrativeRef.current);
+
+  setIsStreaming(true);
+  resetWatchdog();
+
+  break;
+}
 
 case "gm_chunk": {
   if (isLocalStreamingRef.current) break;
@@ -545,6 +552,8 @@ case "gm_chunk": {
 
     default:
       break;
+          } catch (err) {
+    console.error("Realtime handler error:", err, event);
   }
 }, [refetchHistory, refetchPlayers, refetchDiceRolls, refetchSession, fetchNpcs, resetWatchdog, clearWatchdog]);
 
