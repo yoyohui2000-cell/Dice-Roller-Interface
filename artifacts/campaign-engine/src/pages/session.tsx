@@ -172,7 +172,6 @@ export default function Session() {
     watchdogRef.current = setTimeout(() => {
       const notice = "\n\n⚠️ *GM 回應逾時，連線已重置。請重新輸入你的行動。*\n\n";
       narrativeRef.current += notice;
-      setNarrative(narrativeRef.current);
       setIsStreaming(false);
       setTurnState({ who: "全體", dice: null, purpose: null });
       isLocalStreamingRef.current = false;
@@ -400,20 +399,6 @@ export default function Session() {
     return undefined;
   }, [session?.worldState]);
 
-  useEffect(() => {
-    if (history && !narrativeRef.current && !isStreaming) {
-      const formatted = history.map(entry => {
-        if (entry.role === "assistant") return `[GM] ${entry.content}`;
-        const pName = players?.find(p => p.id === entry.playerId)?.characterName || "玩家";
-        return `[${pName}] ${entry.content}`;
-      }).join("\n\n");
-      if (formatted) {
-        const initial = formatted + "\n\n";
-        narrativeRef.current = initial;
-        setNarrative(initial);
-      }
-    }
-  }, [history, players]);
 
   useEffect(() => {
     if (turnState.dice !== null && turnState.purpose) {
@@ -462,6 +447,30 @@ export default function Session() {
     if (sessionId) fetchNpcs();
   }, [sessionId, fetchNpcs]);
 
+const [historyNarrative, setHistoryNarrative] = useState("");
+
+const buildNarrativeFromHistory = useCallback(() => {
+  if (!history || history.length === 0) {
+    narrativeRef.current = "";
+    setHistoryNarrative("");
+    return;
+  }
+
+  const formatted = history.map(entry => {
+    if (entry.role === "assistant") return `[GM] ${entry.content}`;
+    const pName = players?.find(p => p.id === entry.playerId)?.characterName || "玩家";
+    return `[${pName}] ${entry.content}`;
+  }).join("\n\n");
+
+  const next = formatted ? formatted + "\n\n" : "";
+  narrativeRef.current = next;
+  setHistoryNarrative(next);
+}, [history, players]);
+
+useEffect(() => {
+  buildNarrativeFromHistory();
+}, [buildNarrativeFromHistory, sessionId]);
+  
 const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
   console.log("[session event]", event);
 
@@ -470,10 +479,8 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
       const rollText = event.rollInfo ? ` ${event.rollInfo}` : "";
       const line = `[${event.characterName}] ${event.action}${rollText}\n\n[GM] `;
       console.log("[player_action] append line", { line });
-      narrativeRef.current += line;
       streamStartPosRef.current = narrativeRef.current.length;
       console.log("[player_action] narrative len", narrativeRef.current.length);
-      setNarrative(narrativeRef.current);
       setIsStreaming(true);
       resetWatchdog();
       break;
@@ -485,9 +492,7 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
         break;
       }
       console.log("[gm_chunk] chunk", event.chunk);
-      narrativeRef.current += event.chunk;
       console.log("[gm_chunk] narrative len", narrativeRef.current.length);
-      setNarrative(narrativeRef.current);
       resetWatchdog();
       break;
     }
@@ -508,7 +513,6 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
         .trimEnd() + "\n\n";
 
       console.log("[gm_done] cleaned narrative len", narrativeRef.current.length);
-      setNarrative(narrativeRef.current);
       setIsStreaming(false);
       clearWatchdog();
       refetchHistory();
@@ -567,7 +571,6 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
       console.log("[dice_roll] append line", { line });
       narrativeRef.current += line;
       console.log("[dice_roll] narrative len", narrativeRef.current.length);
-      setNarrative(narrativeRef.current);
       break;
     }
 
@@ -576,7 +579,6 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
       console.log("[player_joined] append line", { line });
       narrativeRef.current += line;
       console.log("[player_joined] narrative len", narrativeRef.current.length);
-      setNarrative(narrativeRef.current);
       refetchPlayers();
       break;
     }
@@ -631,7 +633,6 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
     const isNpcContinue = isNpcTurn && !action.trim() && !rollText;
     const line = isNpcContinue ? `\n[GM] ` : `[${pName}] ${currentAction}${rollText}\n\n[GM] `;
     narrativeRef.current += line;
-    setNarrative(narrativeRef.current);
     setIsStreaming(true);
     resetWatchdog();
 
@@ -679,7 +680,6 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
             const data = JSON.parse(line.slice(6));
             if (data.content) {
               narrativeRef.current += data.content;
-              setNarrative(narrativeRef.current);
               resetWatchdog();
             }
             if (data.done) {
@@ -688,7 +688,6 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
                 .replace(/\n?%%TURN:\{[^%]+?\}%%[ \t]*/gs, "")
                 .replace(/\n?%%PLAYER_UPDATE:\{[^%]*\}%%[ \t]*/g, "")
                 .trimEnd() + "\n\n";
-              setNarrative(narrativeRef.current);
               clearWatchdog();
               setIsStreaming(false);
 
@@ -1156,7 +1155,7 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
             ref={scrollRef}
             className="flex-1 overflow-y-auto p-4 sm:p-8 font-serif text-base sm:text-lg leading-relaxed whitespace-pre-wrap relative z-10"
           >
-            {narrative || <span className="italic text-muted-foreground">故事尚未開始...</span>}
+            {historyNarrative || <span className="italic text-muted-foreground">故事尚未開始...</span>}
             {isStreaming && <span className="inline-block w-2 h-5 bg-primary animate-pulse ml-1 align-middle shadow-[0_0_8px_rgba(200,140,50,0.8)]" />}
           </div>
 
