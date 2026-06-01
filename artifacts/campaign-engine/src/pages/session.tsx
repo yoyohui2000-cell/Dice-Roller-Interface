@@ -297,7 +297,7 @@ export default function Session() {
     } catch (err) {
       console.error(err);
     } finally {
-      setIsSubmittingInit(false);
+  isLocalStreamingRef.current = false;
     }
   };
 
@@ -657,10 +657,15 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
           if (!line.startsWith("data: ")) continue;
           try {
             const data = JSON.parse(line.slice(6));
-            if (data.content) {
-              resetWatchdog();
-            }
+if (data.content) {
+  narrativeRef.current += data.content;
+  setNarrative(narrativeRef.current);
+
+  setIsStreaming(true);
+  resetWatchdog();
+}
             if (data.done) {
+              isLocalStreamingRef.current = false;
               clearWatchdog();
               setIsStreaming(false);
 
@@ -763,11 +768,10 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
       // Flush any remaining complete event in the buffer
       if (sseBuffer.trim()) processEvent(sseBuffer);
     } catch (err) {
-      clearWatchdog();
-      isLocalStreamingRef.current = false;
-      setIsStreaming(false);
-      setTurnState({ who: "全體", dice: null, purpose: null });
-      console.error(err);
+  isLocalStreamingRef.current = false;
+  setIsStreaming(false);
+  clearWatchdog();
+  console.error(err);
     }
   };
 
