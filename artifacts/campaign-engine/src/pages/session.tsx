@@ -473,16 +473,23 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
 
   switch (event.type) {
     case "player_action": {
+      narrativeRef.current += line;
+setNarrative(narrativeRef.current);
       refetchHistory();
       setIsStreaming(true);
       resetWatchdog();
       break;
     }
 
-    case "gm_chunk": {
-      resetWatchdog();
-      break;
-    }
+case "gm_chunk": {
+  if (isLocalStreamingRef.current) break;
+
+  narrativeRef.current += event.chunk;
+  setNarrative(narrativeRef.current);
+
+  resetWatchdog();
+  break;
+}
 
     case "gm_done": {
       setIsStreaming(false);
