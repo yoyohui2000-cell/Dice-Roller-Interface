@@ -564,10 +564,13 @@ export default function Session() {
     // Auto-use first player if none selected yet (handles dice auto-submit race)
     const effectivePlayerId = selectedPlayerId ?? players?.[0]?.id ?? null;
     if (isStreaming || !effectivePlayerId) return;
-    // During NPC turns, allow sending even with no action (blank = "continue" signal)
     if (!isDiceMode && !action.trim() && !isNpcTurn) return;
-    // Block player action only when it's another PLAYER's turn (not NPC)
-    if (!isDiceMode && !isMyTurn && !isNpcTurn) return;
+    if (isDiceMode) {
+      const namedPlayerExists = [...playerCharNames].some(n => n === turnState.who);
+      if (namedPlayerExists && selectedPlayer?.characterName !== turnState.who) return;
+    } else {
+      if (!isMyTurn && !isNpcTurn) return;
+    }
 
     // Reset the auto-submit guard immediately so it can never double-fire
     pendingDiceAutoSubmit.current = false;
@@ -1166,8 +1169,10 @@ export default function Session() {
 
                     <div className="flex flex-wrap items-center gap-3">
                       {[4, 6, 8, 10, 12, 20, 100].map(max => {
-                        const diceLabel = `D${max}`;
+                          const diceLabel = `D${max}`;
                         if (turnState.dice !== diceLabel) return null;
+                        const namedPlayerExists = [...playerCharNames].some(n => n === turnState.who);
+                        if (namedPlayerExists && selectedPlayer?.characterName !== turnState.who) return null;
                         return (
                           <Button
                             key={diceLabel}
