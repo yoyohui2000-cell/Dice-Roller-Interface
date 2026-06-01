@@ -165,6 +165,26 @@ export default function Session() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const narrativeRef = useRef<string>("");
   const [isConnected, setIsConnected] = useState(false);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetWatchdog = useCallback(() => {
+    if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    watchdogRef.current = setTimeout(() => {
+      const notice = "\n\n⚠️ *GM 回應逾時，連線已重置。請重新輸入你的行動。*\n\n";
+      narrativeRef.current += notice;
+      setNarrative(narrativeRef.current);
+      setIsStreaming(false);
+      setTurnState({ who: "全體", dice: null, purpose: null });
+      isLocalStreamingRef.current = false;
+    }, 120_000);
+  }, []);
+
+  const clearWatchdog = useCallback(() => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  }, []);
 
   const [rollingDice, setRollingDice] = useState<string | null>(null);
   const [rollResult, setRollResult] = useState<number | null>(null);
@@ -381,18 +401,6 @@ export default function Session() {
   }, [session?.worldState]);
 
   useEffect(() => {
-    if (!isStreaming) return;
-    const watchdog = setTimeout(() => {
-      const notice = "\n\n⚠️ *GM 回應逾時，連線已重置。請重新輸入你的行動。*\n\n";
-      narrativeRef.current += notice;
-      setNarrative(narrativeRef.current);
-      setIsStreaming(false);
-      setTurnState({ who: "全體", dice: null, purpose: null });
-    }, 30_000);
-    return () => clearTimeout(watchdog);
-  }, [isStreaming]);
-
-  useEffect(() => {
     if (history && !narrativeRef.current && !isStreaming) {
       const formatted = history.map(entry => {
         if (entry.role === "assistant") return `[GM] ${entry.content}`;
@@ -463,12 +471,14 @@ export default function Session() {
         streamStartPosRef.current = narrativeRef.current.length;
         setNarrative(narrativeRef.current);
         setIsStreaming(true);
+        resetWatchdog();
         break;
       }
       case "gm_chunk": {
         if (isLocalStreamingRef.current) break;
         narrativeRef.current += event.chunk;
         setNarrative(narrativeRef.current);
+        resetWatchdog();
         break;
       }
       case "gm_done": {
@@ -481,6 +491,7 @@ export default function Session() {
           .trimEnd() + "\n\n";
         setNarrative(narrativeRef.current);
         setIsStreaming(false);
+        clearWatchdog();
         refetchHistory();
         refetchPlayers();
         refetchDiceRolls();
@@ -540,7 +551,7 @@ export default function Session() {
         break;
       }
     }
-  }, [refetchHistory, refetchPlayers, refetchDiceRolls, refetchSession, fetchNpcs]);
+  }, [refetchHistory, refetchPlayers, refetchDiceRolls, refetchSession, fetchNpcs, resetWatchdog, clearWatchdog]);
 
   const { broadcast } = useRealtimeSession({
     sessionId,
@@ -579,6 +590,7 @@ export default function Session() {
     narrativeRef.current += line;
     setNarrative(narrativeRef.current);
     setIsStreaming(true);
+    resetWatchdog();
 
     broadcast({
       type: "player_action",
@@ -625,6 +637,7 @@ export default function Session() {
             if (data.content) {
               narrativeRef.current += data.content;
               setNarrative(narrativeRef.current);
+              resetWatchdog();
             }
             if (data.done) {
               narrativeRef.current = narrativeRef.current
@@ -633,6 +646,7 @@ export default function Session() {
                 .replace(/\n?%%PLAYER_UPDATE:\{[^%]*\}%%[ \t]*/g, "")
                 .trimEnd() + "\n\n";
               setNarrative(narrativeRef.current);
+              clearWatchdog();
               setIsStreaming(false);
 
               const newTurnState: TurnState = data.turnState ?? { who: "全體", dice: null, purpose: null };
@@ -734,6 +748,7 @@ export default function Session() {
       // Flush any remaining complete event in the buffer
       if (sseBuffer.trim()) processEvent(sseBuffer);
     } catch (err) {
+      clearWatchdog();
       isLocalStreamingRef.current = false;
       setIsStreaming(false);
       setTurnState({ who: "全體", dice: null, purpose: null });
