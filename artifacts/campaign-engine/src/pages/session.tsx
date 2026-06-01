@@ -484,7 +484,6 @@ case "player_action": {
 
   setIsStreaming(true);
   resetWatchdog();
-
   break;
 }
 
