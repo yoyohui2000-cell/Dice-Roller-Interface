@@ -79,7 +79,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const routerBase = import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "") || "/";
+  const routerBase = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 
   return (
     <QueryClientProvider client={queryClient}>
