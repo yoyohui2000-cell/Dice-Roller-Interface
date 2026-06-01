@@ -30,28 +30,43 @@ interface UseRealtimeSessionOptions {
   sessionId: number;
   onEvent: (event: RealtimeEvent) => void;
   onStatusChange?: (connected: boolean) => void;
+  debug?: boolean;
 }
 
-export function useRealtimeSession({ sessionId, onEvent, onStatusChange }: UseRealtimeSessionOptions) {
+export function useRealtimeSession({
+  sessionId,
+  onEvent,
+  onStatusChange,
+  debug = true,
+}: UseRealtimeSessionOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const onEventRef = useRef(onEvent);
   const onStatusChangeRef = useRef(onStatusChange);
+
   onEventRef.current = onEvent;
   onStatusChangeRef.current = onStatusChange;
 
+  const log = useCallback(
+    (...args: unknown[]) => {
+      if (debug) console.log(`[realtime:${sessionId}]`, ...args);
+    },
+    [debug, sessionId],
+  );
+
   useEffect(() => {
     if (!sessionId) return;
+
+    log("mount -> creating channel");
 
     const channel = supabase.channel(`session:${sessionId}`, {
       config: { broadcast: { self: false } },
     });
 
-    // Broadcast: real-time game events (GM chunks, dice rolls, player actions, etc.)
     channel.on("broadcast", { event: "game_event" }, ({ payload }) => {
+      log("broadcast received", payload);
       onEventRef.current(payload as RealtimeEvent);
     });
 
-    // Postgres Changes: narrative_history — new GM/player messages saved to DB
     channel.on(
       "postgres_changes",
       {
@@ -60,12 +75,12 @@ export function useRealtimeSession({ sessionId, onEvent, onStatusChange }: UseRe
         table: "narrative_history",
         filter: `session_id=eq.${sessionId}`,
       },
-      () => {
+      (payload) => {
+        log("postgres INSERT narrative_history", payload);
         onEventRef.current({ type: "world_state_update" });
       },
     );
 
-    // Postgres Changes: players — HP updates, new players joining
     channel.on(
       "postgres_changes",
       {
@@ -75,12 +90,10 @@ export function useRealtimeSession({ sessionId, onEvent, onStatusChange }: UseRe
         filter: `session_id=eq.${sessionId}`,
       },
       (payload) => {
+        log("postgres players change", payload);
+
         if (payload.eventType === "INSERT") {
-          const p = payload.new as {
-            character_name: string;
-            race: string;
-            class: string;
-          };
+          const p = payload.new as { character_name: string; race: string; class: string };
           onEventRef.current({
             type: "player_joined",
             characterName: p.character_name,
@@ -88,12 +101,7 @@ export function useRealtimeSession({ sessionId, onEvent, onStatusChange }: UseRe
             class: p.class,
           });
         } else if (payload.eventType === "UPDATE") {
-          const p = payload.new as {
-            id: number;
-            character_name: string;
-            hp: number;
-            max_hp: number;
-          };
+          const p = payload.new as { id: number; character_name: string; hp: number; max_hp: number };
           onEventRef.current({
             type: "player_hp_update",
             playerId: p.id,
@@ -105,7 +113,6 @@ export function useRealtimeSession({ sessionId, onEvent, onStatusChange }: UseRe
       },
     );
 
-    // Postgres Changes: campaign_sessions — world state and combat state updates
     channel.on(
       "postgres_changes",
       {
@@ -115,41 +122,68 @@ export function useRealtimeSession({ sessionId, onEvent, onStatusChange }: UseRe
         filter: `id=eq.${sessionId}`,
       },
       (payload) => {
+        log("postgres campaign_sessions UPDATE", payload);
+
         const updated = payload.new as {
           world_state?: string;
           combat_state?: CombatState;
           phase?: string;
         };
+
         if (updated.combat_state !== undefined) {
           onEventRef.current({
             type: "combat_update",
             combatState: updated.combat_state ?? null,
           });
         }
+
         if (updated.world_state !== undefined) {
           onEventRef.current({ type: "world_state_update" });
         }
       },
     );
 
-    channel.subscribe((status) => {
+    channel.subscribe((status, err) => {
+      log("subscribe status", status, err ?? null);
       onStatusChangeRef.current?.(status === "SUBSCRIBED");
+
+      if (status === "SUBSCRIBED") {
+        log("channel subscribed OK");
+      } else if (status === "CHANNEL_ERROR") {
+        log("channel error");
+      } else if (status === "TIMED_OUT") {
+        log("channel timed out");
+      } else if (status === "CLOSED") {
+        log("channel closed");
+      }
     });
+
     channelRef.current = channel;
 
     return () => {
+      log("cleanup -> remove channel");
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [sessionId]);
+  }, [sessionId, log]);
 
-  const broadcast = useCallback((event: RealtimeEvent) => {
-    channelRef.current?.send({
-      type: "broadcast",
-      event: "game_event",
-      payload: event,
-    });
-  }, []);
+  const broadcast = useCallback(
+    (event: RealtimeEvent) => {
+      const channel = channelRef.current;
+      if (!channel) {
+        log("broadcast skipped: no channel", event);
+        return;
+      }
+
+      log("broadcast send", event);
+      channel.send({
+        type: "broadcast",
+        event: "game_event",
+        payload: event,
+      });
+    },
+    [log],
+  );
 
   return { broadcast };
 }
