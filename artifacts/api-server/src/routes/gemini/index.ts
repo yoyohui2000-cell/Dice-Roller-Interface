@@ -72,6 +72,10 @@ router.get("/gemini/conversations/:id/messages", async (req, res): Promise<void>
   res.json(msgs.map(m => ({ ...m, createdAt: m.createdAt.toISOString() })));
 });
 
+const flush = (res: any) => {
+  if (typeof res.flush === "function") res.flush();
+};
+
 router.post("/gemini/conversations/:id/messages", async (req, res): Promise<void> => {
   const params = SendGeminiMessageParams.safeParse(req.params);
   if (!params.success) {
@@ -95,12 +99,14 @@ router.post("/gemini/conversations/:id/messages", async (req, res): Promise<void
   const allMessages = await db.select().from(messages).where(eq(messages.conversationId, params.data.id));
 
   res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
 
   const keepAlive = setInterval(() => {
     res.write(": ping\n\n");
+    flush(res);
   }, 5000);
 
   let fullResponse = "";
@@ -119,14 +125,17 @@ router.post("/gemini/conversations/:id/messages", async (req, res): Promise<void
       if (text) {
         fullResponse += text;
         res.write(` ${JSON.stringify({ content: text })}\n\n`);
+        flush(res);
       }
     }
 
     await db.insert(messages).values({ conversationId: params.data.id, role: "assistant", content: fullResponse });
     res.write(` ${JSON.stringify({ done: true })}\n\n`);
+    flush(res);
   } catch (err) {
     logger.error({ err }, "Gemini stream error");
     res.write(` ${JSON.stringify({ error: "AI error" })}\n\n`);
+    flush(res);
   } finally {
     clearInterval(keepAlive);
     res.end();
