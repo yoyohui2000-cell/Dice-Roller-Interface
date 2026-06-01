@@ -569,7 +569,6 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
     case "dice_roll": {
       const line = `\n💠 ${event.characterName} 擲 ${event.diceType}: **${event.result}**${event.purpose ? ` (${event.purpose})` : ""}\n`;
       console.log("[dice_roll] append line", { line });
-      narrativeRef.current += line;
       console.log("[dice_roll] narrative len", narrativeRef.current.length);
       break;
     }
@@ -577,7 +576,6 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
     case "player_joined": {
       const line = `\n⚔️ ${event.characterName}（${event.race} ${event.class}）加入了冒險隊伍！\n`;
       console.log("[player_joined] append line", { line });
-      narrativeRef.current += line;
       console.log("[player_joined] narrative len", narrativeRef.current.length);
       refetchPlayers();
       break;
@@ -632,7 +630,6 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
     // NPC-turn "continue" signal is an invisible system prompt — don't add it to the visible narrative
     const isNpcContinue = isNpcTurn && !action.trim() && !rollText;
     const line = isNpcContinue ? `\n[GM] ` : `[${pName}] ${currentAction}${rollText}\n\n[GM] `;
-    narrativeRef.current += line;
     setIsStreaming(true);
     resetWatchdog();
 
