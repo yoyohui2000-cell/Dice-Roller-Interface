@@ -271,9 +271,14 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
     : "【玩家】";
   const fullAction = `${playerLabel} ${body.data.action}`;
 
-await db.insert(narrativeHistory).values(...);
+await db.insert(narrativeHistory).values({
+  sessionId: params.data.id,
+  role: "user",
+  content: fullAction,
+  playerId: body.data.playerId,
+});
 
-void broadcastGameEvent(params.data.id, {
+  void broadcastGameEvent(params.data.id, {
   type: "player_action",
   playerId: body.data.playerId,
   characterName: currentPlayer?.characterName ?? "玩家",
