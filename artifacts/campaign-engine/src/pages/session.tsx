@@ -171,7 +171,6 @@ export default function Session() {
     if (watchdogRef.current) clearTimeout(watchdogRef.current);
     watchdogRef.current = setTimeout(() => {
       const notice = "\n\n⚠️ *GM 回應逾時，連線已重置。請重新輸入你的行動。*\n\n";
-      narrativeRef.current += notice;
       setIsStreaming(false);
       setTurnState({ who: "全體", dice: null, purpose: null });
       isLocalStreamingRef.current = false;
@@ -476,123 +475,74 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
 
   switch (event.type) {
     case "player_action": {
-      const rollText = event.rollInfo ? ` ${event.rollInfo}` : "";
-      const line = `[${event.characterName}] ${event.action}${rollText}\n\n[GM] `;
-      console.log("[player_action] append line", { line });
-      streamStartPosRef.current = narrativeRef.current.length;
-      console.log("[player_action] narrative len", narrativeRef.current.length);
+      refetchHistory();
       setIsStreaming(true);
       resetWatchdog();
       break;
     }
 
     case "gm_chunk": {
-      if (isLocalStreamingRef.current) {
-        console.log("[gm_chunk] skipped because local streaming");
-        break;
-      }
-      console.log("[gm_chunk] chunk", event.chunk);
-      console.log("[gm_chunk] narrative len", narrativeRef.current.length);
       resetWatchdog();
       break;
     }
 
     case "gm_done": {
-      if (isLocalStreamingRef.current) {
-        console.log("[gm_done] skipped because local streaming");
-        break;
-      }
-
-      const rawGmText = narrativeRef.current.slice(streamStartPosRef.current);
-      console.log("[gm_done] rawGmText", rawGmText);
-
-      narrativeRef.current = narrativeRef.current
-        .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
-        .replace(/\n?%%TURN:\{[^%]*\}%%\s*$/, "")
-        .replace(/\n?%%PLAYER_UPDATE:\{[^%]*\}%%[ \t]*/g, "")
-        .trimEnd() + "\n\n";
-
-      console.log("[gm_done] cleaned narrative len", narrativeRef.current.length);
       setIsStreaming(false);
       clearWatchdog();
       refetchHistory();
       refetchPlayers();
       refetchDiceRolls();
 
-      if (event.turnState) {
-        console.log("[gm_done] turnState", event.turnState);
-        setTurnState(event.turnState);
-      }
+      if (event.turnState) setTurnState(event.turnState);
 
       if (event.combatState !== undefined) {
-        console.log("[gm_done] combatState", event.combatState);
         setCombatState(event.combatState);
         if (event.combatState !== null) setSidebarTab("combat");
       }
 
       setTimeout(() => refetchSession(), 3500);
       setTimeout(() => fetchNpcs(), 3000);
-
-      if (rawGmText.trim()) {
-        const currentPlayers = (playersRef.current ?? []) as PlayerLike[];
-        const freshProposals = parseHpChanges(rawGmText, currentPlayers, turnStateRef.current.who);
-        console.log("[gm_done] hp proposals", freshProposals);
-        if (freshProposals.length > 0) {
-          setHpProposals(prev => [
-            ...freshProposals,
-            ...prev.filter(p => !freshProposals.some(f => f.playerId === p.playerId)),
-          ]);
-        }
-      }
       break;
     }
 
     case "combat_update": {
-      console.log("[combat_update]", event.combatState);
       setCombatState(event.combatState);
       if (event.combatState !== null) setSidebarTab("combat");
       break;
     }
 
     case "turn_change": {
-      console.log("[turn_change]", event);
       setTurnState({ who: event.who, dice: event.dice, purpose: event.purpose });
       break;
     }
 
     case "world_state_update": {
-      console.log("[world_state_update] refetchSession scheduled");
       setTimeout(() => refetchSession(), 500);
       break;
     }
 
     case "dice_roll": {
-      const line = `\n💠 ${event.characterName} 擲 ${event.diceType}: **${event.result}**${event.purpose ? ` (${event.purpose})` : ""}\n`;
-      console.log("[dice_roll] append line", { line });
-      console.log("[dice_roll] narrative len", narrativeRef.current.length);
+      refetchDiceRolls();
+      refetchHistory();
       break;
     }
 
     case "player_joined": {
-      const line = `\n⚔️ ${event.characterName}（${event.race} ${event.class}）加入了冒險隊伍！\n`;
-      console.log("[player_joined] append line", { line });
-      console.log("[player_joined] narrative len", narrativeRef.current.length);
       refetchPlayers();
+      refetchHistory();
       break;
     }
 
     case "player_hp_update": {
-      console.log("[player_hp_update]", event);
       refetchPlayers();
       break;
     }
 
-    default: {
-      console.warn("[session event] unhandled event", event);
+    default:
       break;
-    }
   }
 }, [refetchHistory, refetchPlayers, refetchDiceRolls, refetchSession, fetchNpcs, resetWatchdog, clearWatchdog]);
+
   const { broadcast } = useRealtimeSession({
     sessionId,
     onEvent: handleRealtimeEvent,
@@ -629,7 +579,6 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
 
     // NPC-turn "continue" signal is an invisible system prompt — don't add it to the visible narrative
     const isNpcContinue = isNpcTurn && !action.trim() && !rollText;
-    const line = isNpcContinue ? `\n[GM] ` : `[${pName}] ${currentAction}${rollText}\n\n[GM] `;
     setIsStreaming(true);
     resetWatchdog();
 
