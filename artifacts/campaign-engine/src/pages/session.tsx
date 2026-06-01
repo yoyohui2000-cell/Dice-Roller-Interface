@@ -462,97 +462,137 @@ export default function Session() {
     if (sessionId) fetchNpcs();
   }, [sessionId, fetchNpcs]);
 
-  const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
-    switch (event.type) {
-      case "player_action": {
-        const rollText = event.rollInfo ? ` ${event.rollInfo}` : "";
-        const line = `[${event.characterName}] ${event.action}${rollText}\n\n[GM] `;
-        narrativeRef.current += line;
-        streamStartPosRef.current = narrativeRef.current.length;
-        setNarrative(narrativeRef.current);
-        setIsStreaming(true);
-        resetWatchdog();
-        break;
-      }
-      case "gm_chunk": {
-        if (isLocalStreamingRef.current) break;
-        narrativeRef.current += event.chunk;
-        setNarrative(narrativeRef.current);
-        resetWatchdog();
-        break;
-      }
-      case "gm_done": {
-        if (isLocalStreamingRef.current) break;
-        const rawGmText = narrativeRef.current.slice(streamStartPosRef.current);
-        narrativeRef.current = narrativeRef.current
-          .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
-          .replace(/\n?%%TURN:\{[^%]*\}%%\s*$/, "")
-          .replace(/\n?%%PLAYER_UPDATE:\{[^%]*\}%%[ \t]*/g, "")
-          .trimEnd() + "\n\n";
-        setNarrative(narrativeRef.current);
-        setIsStreaming(false);
-        clearWatchdog();
-        refetchHistory();
-        refetchPlayers();
-        refetchDiceRolls();
-        if (event.turnState) {
-          setTurnState(event.turnState);
-        }
-        if (event.combatState !== undefined) {
-          setCombatState(event.combatState);
-          if (event.combatState !== null) {
-            setSidebarTab("combat");
-          }
-        }
-        setTimeout(() => refetchSession(), 3500);
-        setTimeout(() => fetchNpcs(), 3000);
-        if (rawGmText.trim()) {
-          const currentPlayers = (playersRef.current ?? []) as PlayerLike[];
-          const freshProposals = parseHpChanges(rawGmText, currentPlayers, turnStateRef.current.who);
-          if (freshProposals.length > 0) {
-            setHpProposals(prev => [
-              ...freshProposals,
-              ...prev.filter(p => !freshProposals.some(f => f.playerId === p.playerId)),
-            ]);
-          }
-        }
-        break;
-      }
-      case "combat_update": {
-        setCombatState(event.combatState);
-        if (event.combatState !== null) {
-          setSidebarTab("combat");
-        }
-        break;
-      }
-      case "turn_change": {
-        setTurnState({ who: event.who, dice: event.dice, purpose: event.purpose });
-        break;
-      }
-      case "world_state_update": {
-        setTimeout(() => refetchSession(), 500);
-        break;
-      }
-      case "dice_roll": {
-        const line = `\n💠 ${event.characterName} 擲 ${event.diceType}: **${event.result}**${event.purpose ? ` (${event.purpose})` : ""}\n`;
-        narrativeRef.current += line;
-        setNarrative(narrativeRef.current);
-        break;
-      }
-      case "player_joined": {
-        const line = `\n⚔️ ${event.characterName}（${event.race} ${event.class}）加入了冒險隊伍！\n`;
-        narrativeRef.current += line;
-        setNarrative(narrativeRef.current);
-        refetchPlayers();
-        break;
-      }
-      case "player_hp_update": {
-        refetchPlayers();
-        break;
-      }
-    }
-  }, [refetchHistory, refetchPlayers, refetchDiceRolls, refetchSession, fetchNpcs, resetWatchdog, clearWatchdog]);
+const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
+  console.log("[session event]", event);
 
+  switch (event.type) {
+    case "player_action": {
+      const rollText = event.rollInfo ? ` ${event.rollInfo}` : "";
+      const line = `[${event.characterName}] ${event.action}${rollText}\n\n[GM] `;
+      console.log("[player_action] append line", { line });
+      narrativeRef.current += line;
+      streamStartPosRef.current = narrativeRef.current.length;
+      console.log("[player_action] narrative len", narrativeRef.current.length);
+      setNarrative(narrativeRef.current);
+      setIsStreaming(true);
+      resetWatchdog();
+      break;
+    }
+
+    case "gm_chunk": {
+      if (isLocalStreamingRef.current) {
+        console.log("[gm_chunk] skipped because local streaming");
+        break;
+      }
+      console.log("[gm_chunk] chunk", event.chunk);
+      narrativeRef.current += event.chunk;
+      console.log("[gm_chunk] narrative len", narrativeRef.current.length);
+      setNarrative(narrativeRef.current);
+      resetWatchdog();
+      break;
+    }
+
+    case "gm_done": {
+      if (isLocalStreamingRef.current) {
+        console.log("[gm_done] skipped because local streaming");
+        break;
+      }
+
+      const rawGmText = narrativeRef.current.slice(streamStartPosRef.current);
+      console.log("[gm_done] rawGmText", rawGmText);
+
+      narrativeRef.current = narrativeRef.current
+        .replace(/\n?%%COMBAT:(null|\{[^%]*\})%%[ \t]*/g, "")
+        .replace(/\n?%%TURN:\{[^%]*\}%%\s*$/, "")
+        .replace(/\n?%%PLAYER_UPDATE:\{[^%]*\}%%[ \t]*/g, "")
+        .trimEnd() + "\n\n";
+
+      console.log("[gm_done] cleaned narrative len", narrativeRef.current.length);
+      setNarrative(narrativeRef.current);
+      setIsStreaming(false);
+      clearWatchdog();
+      refetchHistory();
+      refetchPlayers();
+      refetchDiceRolls();
+
+      if (event.turnState) {
+        console.log("[gm_done] turnState", event.turnState);
+        setTurnState(event.turnState);
+      }
+
+      if (event.combatState !== undefined) {
+        console.log("[gm_done] combatState", event.combatState);
+        setCombatState(event.combatState);
+        if (event.combatState !== null) setSidebarTab("combat");
+      }
+
+      setTimeout(() => refetchSession(), 3500);
+      setTimeout(() => fetchNpcs(), 3000);
+
+      if (rawGmText.trim()) {
+        const currentPlayers = (playersRef.current ?? []) as PlayerLike[];
+        const freshProposals = parseHpChanges(rawGmText, currentPlayers, turnStateRef.current.who);
+        console.log("[gm_done] hp proposals", freshProposals);
+        if (freshProposals.length > 0) {
+          setHpProposals(prev => [
+            ...freshProposals,
+            ...prev.filter(p => !freshProposals.some(f => f.playerId === p.playerId)),
+          ]);
+        }
+      }
+      break;
+    }
+
+    case "combat_update": {
+      console.log("[combat_update]", event.combatState);
+      setCombatState(event.combatState);
+      if (event.combatState !== null) setSidebarTab("combat");
+      break;
+    }
+
+    case "turn_change": {
+      console.log("[turn_change]", event);
+      setTurnState({ who: event.who, dice: event.dice, purpose: event.purpose });
+      break;
+    }
+
+    case "world_state_update": {
+      console.log("[world_state_update] refetchSession scheduled");
+      setTimeout(() => refetchSession(), 500);
+      break;
+    }
+
+    case "dice_roll": {
+      const line = `\n💠 ${event.characterName} 擲 ${event.diceType}: **${event.result}**${event.purpose ? ` (${event.purpose})` : ""}\n`;
+      console.log("[dice_roll] append line", { line });
+      narrativeRef.current += line;
+      console.log("[dice_roll] narrative len", narrativeRef.current.length);
+      setNarrative(narrativeRef.current);
+      break;
+    }
+
+    case "player_joined": {
+      const line = `\n⚔️ ${event.characterName}（${event.race} ${event.class}）加入了冒險隊伍！\n`;
+      console.log("[player_joined] append line", { line });
+      narrativeRef.current += line;
+      console.log("[player_joined] narrative len", narrativeRef.current.length);
+      setNarrative(narrativeRef.current);
+      refetchPlayers();
+      break;
+    }
+
+    case "player_hp_update": {
+      console.log("[player_hp_update]", event);
+      refetchPlayers();
+      break;
+    }
+
+    default: {
+      console.warn("[session event] unhandled event", event);
+      break;
+    }
+  }
+}, [refetchHistory, refetchPlayers, refetchDiceRolls, refetchSession, fetchNpcs, resetWatchdog, clearWatchdog]);
   const { broadcast } = useRealtimeSession({
     sessionId,
     onEvent: handleRealtimeEvent,
