@@ -473,88 +473,108 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
     console.log("[session event]", event);
 
     switch (event.type) {
-case "player_action": {
-  const line =
-    `【${event.characterName}】 ${event.action}` +
-    (event.rollInfo ? ` (${event.rollInfo})` : "") +
-    "\n\n[GM] ";
+      case "player_action": {
+        const line =
+          `【${event.characterName}】 ${event.action}` +
+          (event.rollInfo ? ` (${event.rollInfo})` : "") +
+          "\n\n[GM] ";
 
-  narrativeRef.current += line;
-  setNarrative(narrativeRef.current);
+        narrativeRef.current += line;
+        setNarrative(narrativeRef.current);
 
-  setIsStreaming(true);
-  resetWatchdog();
-  break;
-}
-
-case "gm_chunk": {
-  if (isLocalStreamingRef.current) break;
-
-  narrativeRef.current += event.chunk;
-  setNarrative(narrativeRef.current);
-
-  resetWatchdog();
-  break;
-}
-
-    case "gm_done": {
-      setIsStreaming(false);
-      clearWatchdog();
-      refetchHistory();
-      refetchPlayers();
-      refetchDiceRolls();
-
-      if (event.turnState) setTurnState(event.turnState);
-
-      if (event.combatState !== undefined) {
-        setCombatState(event.combatState);
-        if (event.combatState !== null) setSidebarTab("combat");
+        setIsStreaming(true);
+        resetWatchdog();
+        break;
       }
 
-      setTimeout(() => refetchSession(), 3500);
-      setTimeout(() => fetchNpcs(), 3000);
-      break;
-    }
+      case "gm_chunk": {
+        if (isLocalStreamingRef.current) break;
 
-    case "combat_update": {
-      setCombatState(event.combatState);
-      if (event.combatState !== null) setSidebarTab("combat");
-      break;
-    }
+        narrativeRef.current += event.chunk;
+        setNarrative(narrativeRef.current);
 
-    case "turn_change": {
-      setTurnState({ who: event.who, dice: event.dice, purpose: event.purpose });
-      break;
-    }
+        resetWatchdog();
+        break;
+      }
 
-    case "world_state_update": {
-      setTimeout(() => refetchSession(), 500);
-      break;
-    }
+      case "gm_done": {
+        setIsStreaming(false);
+        clearWatchdog();
 
-    case "dice_roll": {
-      refetchDiceRolls();
-      refetchHistory();
-      break;
-    }
+        refetchHistory();
+        refetchPlayers();
+        refetchDiceRolls();
 
-    case "player_joined": {
-      refetchPlayers();
-      refetchHistory();
-      break;
-    }
+        if (event.turnState) {
+          setTurnState(event.turnState);
+        }
 
-    case "player_hp_update": {
-      refetchPlayers();
-      break;
-    }
+        if (event.combatState !== undefined) {
+          setCombatState(event.combatState);
+          if (event.combatState !== null) {
+            setSidebarTab("combat");
+          }
+        }
 
-    default:
-      break;
-          } catch (err) {
+        setTimeout(() => refetchSession(), 3500);
+        setTimeout(() => fetchNpcs(), 3000);
+        break;
+      }
+
+      case "combat_update": {
+        setCombatState(event.combatState);
+        if (event.combatState !== null) {
+          setSidebarTab("combat");
+        }
+        break;
+      }
+
+      case "turn_change": {
+        setTurnState({
+          who: event.who,
+          dice: event.dice,
+          purpose: event.purpose,
+        });
+        break;
+      }
+
+      case "world_state_update": {
+        setTimeout(() => refetchSession(), 500);
+        break;
+      }
+
+      case "dice_roll": {
+        refetchDiceRolls();
+        refetchHistory();
+        break;
+      }
+
+      case "player_joined": {
+        refetchPlayers();
+        refetchHistory();
+        break;
+      }
+
+      case "player_hp_update": {
+        refetchPlayers();
+        break;
+      }
+
+      default:
+        break;
+    }
+  } catch (err) {
     console.error("Realtime handler error:", err, event);
   }
-}, [refetchHistory, refetchPlayers, refetchDiceRolls, refetchSession, fetchNpcs, resetWatchdog, clearWatchdog]);
+}, [
+  refetchHistory,
+  refetchPlayers,
+  refetchDiceRolls,
+  refetchSession,
+  fetchNpcs,
+  resetWatchdog,
+  clearWatchdog,
+]);
 
   const { broadcast } = useRealtimeSession({
     sessionId,
