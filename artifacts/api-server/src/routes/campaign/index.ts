@@ -271,12 +271,17 @@ router.post("/campaign/sessions/:id/gm-message", async (req, res): Promise<void>
     : "【玩家】";
   const fullAction = `${playerLabel} ${body.data.action}`;
 
-  await db.insert(narrativeHistory).values({
-    sessionId: params.data.id,
-    role: "user",
-    content: fullAction,
-    playerId: body.data.playerId,
-  });
+await db.insert(narrativeHistory).values(...);
+
+void broadcastGameEvent(params.data.id, {
+  type: "player_action",
+  playerId: body.data.playerId,
+  characterName: currentPlayer?.characterName ?? "玩家",
+  action: body.data.action,
+  rollInfo: diceInfo
+    ? `${diceInfo.diceType}=${diceInfo.result}`
+    : undefined,
+});
 
   const chatHistory = buildChatHistory(history, sessionPlayers, npcContext, diceInfo, fullAction);
 
