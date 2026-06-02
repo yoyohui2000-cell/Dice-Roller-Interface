@@ -760,18 +760,14 @@ if (data.content) {
       };
 
       while (true) {
-        const { done, value } = await reader.read();
-        console.log(
-  "reader chunk",
-  { done, bytes: value?.length }
-);
-        if (done) break;
-        sseBuffer += decoder.decode(value, { stream: true });
-        console.log("decoded chunk", decoded);
-        // Split on the SSE event delimiter "\n\n" — each complete event is processed,
-        // the trailing partial event (if any) stays in the buffer for the next chunk.
-        const events = sseBuffer.split("\n\n");
-        sseBuffer = events.pop() ?? "";
+const { done, value } = await reader.read();
+
+if (done) break;
+
+const decoded = decoder.decode(value, { stream: true });
+console.log("decoded chunk", decoded);
+
+sseBuffer += decoded;
         for (const event of events) {
           if (event.trim()) processEvent(event);
         }
