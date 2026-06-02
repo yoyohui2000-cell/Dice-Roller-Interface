@@ -669,7 +669,9 @@ if (!res.body) throw new Error("No response body");
             const data = JSON.parse(line.slice(6));
 if (data.content) {
   narrativeRef.current += data.content;
+
   setNarrative(narrativeRef.current);
+  setHistoryNarrative(narrativeRef.current);
 
   setIsStreaming(true);
   resetWatchdog();
