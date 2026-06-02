@@ -634,18 +634,23 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
     isLocalStreamingRef.current = true;
     try {
       const BASE = (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, "");
-      const res = await fetch(`${BASE}/api/campaign/sessions/${sessionId}/gm-message`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          playerId: effectivePlayerId,
-          action: currentAction,
-          diceRollId: submittingRollId,
-        }),
-      });
+const res = await fetch(`${BASE}/api/campaign/sessions/${sessionId}/gm-message`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    playerId: effectivePlayerId,
+    action: currentAction,
+    diceRollId: submittingRollId,
+  }),
+});
 
-      if (!res.body) throw new Error("No response body");
+console.log(
+  "GM fetch response",
+  res.status,
+  res.headers.get("content-type")
+);
 
+if (!res.body) throw new Error("No response body");
       const reader = res.body.getReader();
       // Use {stream: true} so multi-byte UTF-8 chars across chunk boundaries decode correctly
       const decoder = new TextDecoder("utf-8", { fatal: false });
@@ -653,6 +658,7 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
       let sseBuffer = "";
 
       const processEvent = (eventText: string) => {
+        console.log("SSE event raw", eventText);
         for (const line of eventText.split("\n")) {
           if (!line.startsWith("data: ")) continue;
           try {
@@ -755,8 +761,13 @@ if (data.content) {
 
       while (true) {
         const { done, value } = await reader.read();
+        console.log(
+  "reader chunk",
+  { done, bytes: value?.length }
+);
         if (done) break;
         sseBuffer += decoder.decode(value, { stream: true });
+        console.log("decoded chunk", decoded);
         // Split on the SSE event delimiter "\n\n" — each complete event is processed,
         // the trailing partial event (if any) stays in the buffer for the next chunk.
         const events = sseBuffer.split("\n\n");
