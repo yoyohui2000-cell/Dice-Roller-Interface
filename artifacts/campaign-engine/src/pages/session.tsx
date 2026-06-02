@@ -759,19 +759,29 @@ if (data.content) {
         }
       };
 
-      while (true) {
-const { done, value } = await reader.read();
+while (true) {
+  const { done, value } = await reader.read();
 
-if (done) break;
+  console.log("reader chunk", {
+    done,
+    bytes: value?.length,
+  });
 
-const decoded = decoder.decode(value, { stream: true });
-console.log("decoded chunk", decoded);
+  if (done) break;
 
-sseBuffer += decoded;
-        for (const event of events) {
-          if (event.trim()) processEvent(event);
-        }
-      }
+  const decoded = decoder.decode(value, { stream: true });
+  console.log("decoded chunk", decoded);
+
+  sseBuffer += decoded;
+
+  // SSE events separated by blank line
+  const events = sseBuffer.split("\n\n");
+  sseBuffer = events.pop() ?? "";
+
+  for (const event of events) {
+    if (event.trim()) processEvent(event);
+  }
+}
       // Flush any remaining complete event in the buffer
       if (sseBuffer.trim()) processEvent(sseBuffer);
     } catch (err) {
