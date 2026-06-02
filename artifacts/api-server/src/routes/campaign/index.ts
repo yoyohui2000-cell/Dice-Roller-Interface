@@ -296,12 +296,40 @@ await db.insert(narrativeHistory).values({
 
   let fullResponse = "";
   try {
-    const stream = await ai.models.generateContentStream({
+ let stream;
+
+for (let attempt = 0; attempt < 3; attempt++) {
+  try {
+    stream = await ai.models.generateContentStream({
       model: "gemini-2.5-flash",
       contents: chatHistory,
       config: {
         maxOutputTokens: 8192,
         systemInstruction: `${GM_SYSTEM_PROMPT}\n\n## 當前世界狀態\n${session.worldState}`,
+      },
+    });
+
+    break;
+  } catch (err: any) {
+    const status = err?.status;
+
+    console.error("Gemini stream retry", {
+      attempt,
+      status,
+      message: err?.message,
+    });
+
+    if (status !== 503 || attempt === 2) {
+      throw err;
+    }
+
+    await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+  }
+}
+
+if (!stream) {
+  throw new Error("Failed to create Gemini stream");
+}
       },
     });
 
