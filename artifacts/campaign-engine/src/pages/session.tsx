@@ -477,28 +477,25 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
     console.log("[session event]", event);
 
     switch (event.type) {
-      case "player_action": {
-        const line =
-          `【${event.characterName}】 ${event.action}` +
-          (event.rollInfo ? ` (${event.rollInfo})` : "") +
-          "\n\n[GM] ";
+case "player_action": {
+  if (
+    event.playerId !== selectedPlayerId
+  ) {
+    setIsStreaming(true);
+  }
 
-        narrativeRef.current += line;
-        setNarrative(narrativeRef.current);
-
-        setIsStreaming(true);
-        resetWatchdog();
-        break;
-      }
+  break;
+}
 
       case "gm_chunk": {
         if (isLocalStreamingRef.current) break;
 
         narrativeRef.current += event.chunk;
         setNarrative(narrativeRef.current);
-
+console.log("GM CHUNK", event.chunk);
         resetWatchdog();
         break;
+        
       }
 
       case "gm_done": {
@@ -522,7 +519,9 @@ const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
 
         setTimeout(() => refetchSession(), 3500);
         setTimeout(() => fetchNpcs(), 3000);
+        console.log("GM DONE");
         break;
+        
       }
 
       case "combat_update": {
