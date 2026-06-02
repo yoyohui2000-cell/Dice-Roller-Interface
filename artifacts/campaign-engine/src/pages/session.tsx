@@ -1145,13 +1145,20 @@ while (true) {
         <main className="flex-1 flex flex-col relative bg-[#1c1815] shadow-inner">
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/old-wall.png")' }}></div>
 
-          <div
-            ref={scrollRef}
-            className="flex-1 overflow-y-auto p-4 sm:p-8 font-serif text-base sm:text-lg leading-relaxed whitespace-pre-wrap relative z-10"
-          >
-            {historyNarrative || <span className="italic text-muted-foreground">故事尚未開始...</span>}
-            {isStreaming && <span className="inline-block w-2 h-5 bg-primary animate-pulse ml-1 align-middle shadow-[0_0_8px_rgba(200,140,50,0.8)]" />}
-          </div>
+<div
+  ref={scrollRef}
+  className="flex-1 overflow-y-auto p-4 sm:p-8 font-serif text-base sm:text-lg leading-relaxed whitespace-pre-wrap relative z-10"
+>
+  {(narrative || historyNarrative) || (
+    <span className="italic text-muted-foreground">
+      故事尚未開始...
+    </span>
+  )}
+
+  {isStreaming && (
+    <span className="inline-block w-2 h-5 bg-primary animate-pulse ml-1 align-middle" />
+  )}
+</div>
 
           <div className="border-t border-border bg-card relative z-10 shadow-[0_-4px_20px_rgba(0,0,0,0.5)]">
 
