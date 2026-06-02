@@ -455,13 +455,17 @@ const buildNarrativeFromHistory = useCallback(() => {
     return;
   }
 
-  const formatted = history.map(entry => {
-    if (entry.role === "assistant") return `[GM] ${entry.content}`;
-    const pName = players?.find(p => p.id === entry.playerId)?.characterName || "玩家";
-    return `[${pName}] ${entry.content}`;
-  }).join("\n\n");
+const formatted = history.map(entry => {
+  if (entry.role === "assistant") return `[GM] ${entry.content}`;
+  const pName = players?.find(p => p.id === entry.playerId)?.characterName || "玩家";
+  return `[${pName}] ${entry.content}`;
+}).join("\n\n");
 
-  const next = formatted ? formatted + "\n\n" : "";
+const next = formatted ? formatted + "\n\n" : "";
+
+narrativeRef.current = next;
+setHistoryNarrative(next);
+setNarrative(next);
 }, [history, players]);
 
 useEffect(() => {
