@@ -296,7 +296,7 @@ await db.insert(narrativeHistory).values({
 
   let fullResponse = "";
   try {
- let stream;
+let stream: any = null;
 
 for (let attempt = 0; attempt < 3; attempt++) {
   try {
@@ -330,8 +330,7 @@ for (let attempt = 0; attempt < 3; attempt++) {
 if (!stream) {
   throw new Error("Failed to create Gemini stream");
 }
-      },
-    });
+
 
     for await (const chunk of stream) {
       const text = chunk.text;
